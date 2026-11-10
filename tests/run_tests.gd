@@ -9,6 +9,7 @@ const FeedClient := preload("res://addons/free_game_dev_assets/feed_client.gd")
 const Browse := preload("res://addons/free_game_dev_assets/browse.gd")
 const Details := preload("res://addons/free_game_dev_assets/entry_details.gd")
 const Credits := preload("res://addons/free_game_dev_assets/credits.gd")
+const ProjectList := preload("res://addons/free_game_dev_assets/project_list.gd")
 
 const FIXTURE := "res://tests/fixtures/feed_v1.json"
 const SCRATCH := "user://test_cache"
@@ -44,6 +45,7 @@ func _initialize() -> void:
 	_run("_test_browse")
 	_run("_test_details")
 	_run("_test_credits")
+	_run("_test_project_list")
 	_clear_scratch()
 	if _failed.is_empty():
 		print("tests ok: %d checks" % _passed)
@@ -626,6 +628,100 @@ func _test_credits() -> bool:
 	eq("import: page links and bare ids mixed", Credits.ids_from_text("cc0-e, https://example.org/entry/credit-a/\nmit-d mit-d", feed)["ids"], ["cc0-e", "credit-a", "mit-d"])
 	eq("import: ordinary words are ignored", Credits.ids_from_text("Credits for my game: art and music", feed), {"ids": [], "unknown": []})
 	eq("import: a percent-encoded link", Credits.ids_from_text("https://example.org/entry/credit%2Da/", feed)["ids"], ["credit-a"])
+	return true
+
+
+# --- project_list.gd ---------------------------------------------------------
+# The list and CREDITS.md actions on files in the scratch folder.
+
+func _project_list() -> Object:
+	var dir := ProjectSettings.globalize_path(SCRATCH)
+	DirAccess.make_dir_recursive_absolute(dir)
+	var list := ProjectList.new()
+	list.list_path = dir.path_join("list.json")
+	list.credits_path = dir.path_join("CREDITS.md")
+	for path in [list.list_path, list.credits_path]:
+		DirAccess.remove_absolute(path)  # a file, or the folder one check puts there
+	return list
+
+
+func _test_project_list() -> bool:
+	var entries := _credit_entries()
+	var feed := {"version": "v2026.11.10", "siteUrl": "https://example.org/", "entries": entries}
+	var by_id := {}
+	for e in entries:
+		by_id[e["id"]] = e
+
+	# Add and remove.
+	var list := _project_list()
+	list.reload()
+	eq("list: no file is an empty list", [list.ids, list.error], [[], ""])
+	eq("list: add says nothing", list.toggle(by_id["credit-a"]), "")
+	eq("list: add writes the file", list.written, PackedStringArray([list.list_path]))
+	list.toggle(by_id["mit-d"])
+	eq("list: saved in order", Credits.parse_list(FileAccess.get_file_as_string(list.list_path))["ids"], ["credit-a", "mit-d"])
+	eq("list: snapshot saved", Credits.parse_list(FileAccess.get_file_as_string(list.list_path))["known"]["mit-d"]["license"], "MIT")
+	list.toggle(by_id["credit-a"])
+	eq("list: remove", list.ids, ["mit-d"])
+	eq("list: remove drops the snapshot", list.known.has("credit-a"), false)
+
+	# Edits made outside the plugin are read before every action.
+	var f := FileAccess.open(list.list_path, FileAccess.WRITE)
+	f.store_string(Credits.list_text(["cc0-e", "mit-d"], {}))
+	f.close()
+	list.toggle(by_id["credit-a"])
+	eq("list: a hand edit is kept", list.ids, ["cc0-e", "mit-d", "credit-a"])
+	eq("list: missing counts ids not in the feed", list.missing({"entries": [by_id["mit-d"]]}), 2)
+	eq("list: missing is 0 with no feed", list.missing({}), 0)
+
+	# A broken list file is reported and never overwritten.
+	f = FileAccess.open(list.list_path, FileAccess.WRITE)
+	f.store_string("{not json")
+	f.close()
+	eq("broken list: toggle refuses", list.toggle(by_id["cc0-e"]).contains("not valid JSON"), true)
+	eq("broken list: export refuses", list.export_credits(feed).contains("not valid JSON"), true)
+	eq("broken list: import refuses", list.import_text("cc0-e", feed).contains("not valid JSON"), true)
+	eq("broken list: file untouched", FileAccess.get_file_as_string(list.list_path), "{not json")
+	eq("broken list: nothing written", list.written, PackedStringArray())
+
+	# Export: writes, then leaves an up-to-date file alone.
+	list = _project_list()
+	list.import_text("credit-a mit-d", feed)
+	eq("export: writes CREDITS.md", list.export_credits(feed), "Wrote CREDITS.md for 2 assets.")
+	eq("export: wrote only CREDITS.md (list unchanged)", list.written, PackedStringArray([list.credits_path]))
+	eq("export: again, up to date", list.export_credits(feed), "CREDITS.md is already up to date.")
+	eq("export: again, writes nothing", list.written, PackedStringArray())
+	f = FileAccess.open(list.credits_path, FileAccess.WRITE)
+	f.store_string(Credits.START + "\nhalf a block\n")
+	f.close()
+	eq("export: broken markers refused", list.export_credits(feed).contains("markers"), true)
+	eq("export: broken markers left alone", FileAccess.get_file_as_string(list.credits_path), Credits.START + "\nhalf a block\n")
+
+	# A list file that can't be written: said after the export result.
+	list = _project_list()
+	list.import_text("credit-a", feed)
+	var aged: Dictionary = list.known.duplicate(true)
+	aged["credit-a"]["license"] = "CC-BY-2.0"
+	f = FileAccess.open(list.list_path, FileAccess.WRITE)
+	f.store_string(Credits.list_text(list.ids, aged))
+	f.close()
+	var changed_note: String = list.export_credits(feed)
+	eq("export: names changed entries", changed_note.contains("Changed since added: Credit A (licence CC-BY-2.0 → "), true)
+	DirAccess.remove_absolute(list.list_path)
+	DirAccess.make_dir_absolute(list.list_path)
+	var unwritable_note: String = list.export_credits(feed)
+	eq("export: unwritable list reported last", unwritable_note.ends_with("Could not save list.json."), true)
+	eq("import: unwritable list reported", list.import_text("mit-d", feed), "Could not write %s." % list.list_path)
+	DirAccess.remove_absolute(list.list_path)
+
+	# Import notes.
+	list = _project_list()
+	eq("import: nothing found", list.import_text("my own words", feed), "Found no catalog entries in the pasted text.")
+	eq("import: nothing found writes nothing", list.written, PackedStringArray())
+	eq("import: added, already, unknown", list.import_text("credit-a https://example.org/entry/gone-y/", feed), "Added 1 to the project. 1 not in the catalog: gone-y.")
+	eq("import: again", list.import_text("credit-a", feed), "Added 0 to the project (1 already in it).")
+	for path in [list.list_path, list.credits_path]:
+		DirAccess.remove_absolute(path)
 	return true
 
 

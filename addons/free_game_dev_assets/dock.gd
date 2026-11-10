@@ -12,6 +12,7 @@ const FeedClient := preload("feed_client.gd")
 const Browse := preload("browse.gd")
 const Details := preload("entry_details.gd")
 const Credits := preload("credits.gd")
+const ProjectList := preload("project_list.gd")
 
 ## Typing waits this long after the last key before the list updates.
 const SEARCH_DELAY_SEC := 0.2
@@ -55,9 +56,7 @@ var _shown_by_id: Dictionary = {}
 var _d_project: Button
 
 # The project's asset list (res://free_game_dev_assets.json).
-var _project_ids: Array = []
-var _known: Dictionary = {}
-var _list_error := ""
+var _list := ProjectList.new()
 var _project_label: Label
 var _project_only: CheckBox
 var _export: Button
@@ -80,7 +79,7 @@ var _d_verified: Label
 func _ready() -> void:
 	_settings_path = EditorInterface.get_editor_paths().get_config_dir().path_join(Browse.SETTINGS_FILE)
 	filters = Browse.load_filters(_settings_path)
-	_load_list()
+	_list.reload()
 
 	var title := Label.new()
 	title.text = "Free Game Dev Assets"
@@ -243,7 +242,7 @@ func _show_details(e: Dictionary) -> void:
 	_d_copy.disabled = not credit["can_copy"]
 	if credit["note"] != "":
 		notes.append(credit["note"])
-	var changed := Credits.changes([e["id"]], _known, feed) if _project_ids.has(e["id"]) else []
+	var changed := Credits.changes([e["id"]], _list.known, feed) if _list.ids.has(e["id"]) else []
 	if not changed.is_empty():
 		var c: Dictionary = changed[0]
 		var what := PackedStringArray()
@@ -379,7 +378,7 @@ func _rebuild() -> void:
 		return
 	var total := entries.size()
 	if filters.get("project_only", false):
-		entries = entries.filter(func(e): return _project_ids.has(e["id"]))
+		entries = entries.filter(func(e): return _list.ids.has(e["id"]))
 	var shown := Browse.apply(entries, filters)
 	_count.text = "Showing %d of %d" % [shown.size(), total]
 	var categories: Dictionary = feed.get("categories", {})
@@ -387,7 +386,7 @@ func _rebuild() -> void:
 	var keep_id: String = _selected.get("id", "")
 	var keep: TreeItem = null
 	var changed := {}
-	for c in Credits.changes(_project_ids, _known, feed):
+	for c in Credits.changes(_list.ids, _list.known, feed):
 		changed[c["id"]] = true
 	var root := _tree.create_item()
 	for e in shown:
@@ -396,7 +395,7 @@ func _rebuild() -> void:
 		if e["id"] == keep_id:
 			keep = item
 		var name := String(e["name"])
-		if _project_ids.has(e["id"]):
+		if _list.ids.has(e["id"]):
 			name = "✓ " + name
 		if changed.has(e["id"]):
 			name += "  (changed since added)"
@@ -462,7 +461,7 @@ func _on_loaded(state: Dictionary) -> void:
 	_status.text = line if message == "" else "%s\n%s" % [line, message]
 	_fill_options()
 	_fit_columns()
-	_load_list()
+	_list.reload()
 	_rebuild()
 	_update_project_row()
 	feed_changed.emit(feed)
@@ -509,71 +508,38 @@ func _build_project_row() -> void:
 	_update_project_row()
 
 
-## Reads the list from the project, so edits from git or by hand show up.
-func _load_list() -> void:
-	var text := ""
-	if FileAccess.file_exists(Credits.LIST_FILE):
-		text = FileAccess.get_file_as_string(Credits.LIST_FILE)
-	var parsed := Credits.parse_list(text)
-	_list_error = parsed["error"]
-	if _list_error == "":
-		_project_ids = parsed["ids"]
-		_known = parsed["known"]
-
-
-func _save_list() -> bool:
-	var text := Credits.list_text(_project_ids, _known)
-	if FileAccess.file_exists(Credits.LIST_FILE) and FileAccess.get_file_as_string(Credits.LIST_FILE) == text:
-		return true
-	if not _write(Credits.LIST_FILE, text):
-		_note("Could not write %s." % Credits.LIST_FILE)
-		return false
-	return true
-
-
-func _write(path: String, text: String) -> bool:
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f == null:
-		return false
-	f.store_string(text)
-	f.close()
-	EditorInterface.get_resource_filesystem().update_file(path)
-	return true
+## Shows the result of a list action (a ProjectList note), tells the editor
+## about the files it wrote, and refreshes everything that shows the list.
+func _after_list_action(note: String) -> void:
+	for path in _list.written:
+		EditorInterface.get_resource_filesystem().update_file(path)
+	_note(note)
+	_rebuild()
+	_update_project_row()
 
 
 func _update_project_row() -> void:
 	if _project_label == null:
 		return
-	if _list_error != "":
+	if _list.error != "":
 		_project_label.text = "Asset list: error"
-		_note(_list_error)
+		_note(_list.error)
 	else:
-		var missing := _project_ids.filter(func(id): return not feed.is_empty() and not _has_entry(id)).size()
-		var text := "This project uses %d" % _project_ids.size()
+		var missing := _list.missing(feed)
+		var text := "This project uses %d" % _list.ids.size()
 		var flags := PackedStringArray()
 		if missing > 0:
 			flags.append("%d no longer listed" % missing)
-		var changed := Credits.changes(_project_ids, _known, feed).size()
+		var changed := Credits.changes(_list.ids, _list.known, feed).size()
 		if changed > 0:
 			flags.append("%d changed since added" % changed)
 		if not flags.is_empty():
 			text += " (%s)" % ", ".join(flags)
 		_project_label.text = text
 		_project_label.tooltip_text = "Rows marked \"changed since added\" show what changed when selected. Export credits writes the new terms." if changed > 0 else ""
-	_export.disabled = feed.is_empty() or _list_error != "" or _project_ids.is_empty()
-	_import.disabled = feed.is_empty() or _list_error != ""
+	_export.disabled = feed.is_empty() or _list.error != "" or _list.ids.is_empty()
+	_import.disabled = feed.is_empty() or _list.error != ""
 	_update_project_button()
-
-
-func _has_entry(id: String) -> bool:
-	return not _entry_by_id(id).is_empty()
-
-
-func _entry_by_id(id: String) -> Dictionary:
-	for e in feed.get("entries", []):
-		if e["id"] == id:
-			return e
-	return {}
 
 
 func _on_import_pressed() -> void:
@@ -601,39 +567,15 @@ func _on_import_pressed() -> void:
 ## Adds the catalog entries found in `text` to the project's list, after
 ## the ones already there.
 func _import_ids(text: String) -> void:
-	_load_list()
-	if _list_error != "":
-		_update_project_row()
-		return
-	var found := Credits.ids_from_text(text, feed)
-	var added := 0
-	for id in found["ids"]:
-		if not _project_ids.has(id):
-			_project_ids.append(id)
-			_known[id] = Credits.snapshot(_entry_by_id(id))
-			added += 1
-	var note := "Found no catalog entries in the pasted text."
-	if not found["ids"].is_empty() or not found["unknown"].is_empty():
-		note = "Added %d to the project" % added
-		var already: int = found["ids"].size() - added
-		if already > 0:
-			note += " (%d already in it)" % already
-		note += "."
-		if not found["unknown"].is_empty():
-			note += " %d not in the catalog: %s." % [found["unknown"].size(), ", ".join(PackedStringArray(found["unknown"]))]
-	if added > 0 and not _save_list():
-		return  # _save_list said why
-	_note(note)
-	_rebuild()
-	_update_project_row()
+	_after_list_action(_list.import_text(text, feed))
 
 
 func _update_project_button() -> void:
 	if _d_project == null or _selected.is_empty():
 		return
-	var inside := _project_ids.has(_selected["id"])
+	var inside := _list.ids.has(_selected["id"])
 	_d_project.text = "Remove from project" if inside else "Add to project"
-	_d_project.disabled = _list_error != ""
+	_d_project.disabled = _list.error != ""
 
 
 func _note(text: String) -> void:
@@ -644,53 +586,9 @@ func _note(text: String) -> void:
 func _on_toggle_project() -> void:
 	if _selected.is_empty():
 		return
-	_load_list()
-	if _list_error != "":
-		_update_project_row()
-		return
-	var id: String = _selected["id"]
-	if _project_ids.has(id):
-		_project_ids.erase(id)
-		_known.erase(id)
-	else:
-		_project_ids.append(id)
-		_known[id] = Credits.snapshot(_selected)
-	if _save_list():
-		_note("")
-	_rebuild()
-	_update_project_row()
+	_after_list_action(_list.toggle(_selected))
 
 
 func _on_export() -> void:
-	_load_list()
-	if _list_error != "":
-		_update_project_row()
-		return
-	var block := Credits.export_block(_project_ids, _known, feed)
-	var existing := ""
-	if FileAccess.file_exists(Credits.CREDITS_FILE):
-		existing = FileAccess.get_file_as_string(Credits.CREDITS_FILE)
-	var merged := Credits.merge(existing, block["text"])
-	if not merged["ok"]:
-		_note(merged["error"])
-		return
-	_known = block["known"]
-	var list_saved := _save_list()
-	var gone := ""
-	if block["missing"] > 0:
-		gone = " %d no longer listed: see that section." % block["missing"]
-	if not block["changed"].is_empty():
-		gone += " Changed since added: %s." % "; ".join(PackedStringArray(block["changed"].map(func(c): return Credits.change_text(c))))
-	var note := ""
-	if merged["text"] == existing:
-		note = "%s is already up to date.%s" % [Credits.CREDITS_FILE.get_file(), gone]
-	elif _write(Credits.CREDITS_FILE, merged["text"]):
-		note = "Wrote %s for %d assets.%s" % [Credits.CREDITS_FILE.get_file(), _project_ids.size(), gone]
-	else:
-		note = "Could not write %s." % Credits.CREDITS_FILE
-	# Shown after the export result, so a failed list save isn't hidden by it.
-	if not list_saved:
-		note += " Could not save %s." % Credits.LIST_FILE.get_file()
-	_note(note)
-	_rebuild()  # the refreshed snapshots clear "changed since added"
-	_update_project_row()
+	# The rebuild also clears "changed since added": export refreshes the snapshots.
+	_after_list_action(_list.export_credits(feed))

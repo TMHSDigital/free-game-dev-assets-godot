@@ -80,7 +80,7 @@ func _capture(dock) -> void:  # untyped: reaches into dock.gd's members
 		var f := FileAccess.open(dock.Credits.LIST_FILE, FileAccess.WRITE)
 		f.store_string(dock.Credits.list_text(ids, known))
 		f.close()
-		dock._load_list()
+		dock._list.reload()
 		dock.filters["project_only"] = true
 		dock._project_only.set_pressed_no_signal(true)
 	dock._rebuild()

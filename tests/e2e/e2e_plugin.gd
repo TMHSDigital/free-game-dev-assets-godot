@@ -93,9 +93,9 @@ func _run(dock) -> void:
 	for path in [Credits.LIST_FILE, Credits.CREDITS_FILE]:
 		if FileAccess.file_exists(path):
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	dock._load_list()
+	dock._list.reload()
 	dock._update_project_row()
-	eq("starts with an empty list", dock._project_ids, [])
+	eq("starts with an empty list", dock._list.ids, [])
 	eq("export is off with nothing added", dock._export.disabled, true)
 
 	var picks := _picks(dock.feed)
@@ -159,7 +159,7 @@ func _run(dock) -> void:
 	f = FileAccess.open(Credits.LIST_FILE, FileAccess.WRITE)
 	f.store_string(Credits.list_text(aged["ids"], aged["known"]))
 	f.close()
-	dock._load_list()
+	dock._list.reload()
 	dock._update_project_row()
 	_select(dock, credited)
 	eq("changed: project row counts it", dock._project_label.text, "This project uses 3 (1 changed since added)")
@@ -220,7 +220,7 @@ func _run(dock) -> void:
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(Credits.LIST_FILE))
 
 	# Import: the dialog opens, and pasted links and ids land in the list.
-	dock._load_list()
+	dock._list.reload()
 	dock._update_project_row()
 	dock._on_import_pressed()
 	eq("import: dialog opens", dock._import_dialog.visible, true)

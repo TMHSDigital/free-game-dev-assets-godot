@@ -21,7 +21,8 @@ addons/free_game_dev_assets/
   dock.gd           the dock UI
   browse.gd         search, filters, sort and saved filter state (no editor APIs)
   entry_details.gd  what the details panel says, and which links are safe to open (no editor APIs)
-  credits.gd        the project's asset list and CREDITS.md, ported from the website (no editor APIs)
+  credits.gd        the asset list format and CREDITS.md text, ported from the website (no editor APIs)
+  project_list.gd   reading and writing those two files, and what to tell the user (no editor APIs)
   feed.gd           parses and checks plugin-feed.json (no editor APIs)
   feed_cache.gd     the saved copy and its download metadata
   feed_client.gd    the request, and falling back to the saved copy
