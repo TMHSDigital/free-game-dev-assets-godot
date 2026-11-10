@@ -33,13 +33,12 @@ to the source.
 > read the source's own terms before you ship.
 
 > [!IMPORTANT]
-> Early development, not yet released. The dock already browses, searches and filters the
-> catalog, shows each entry's details and copies credit lines; `CREDITS.md` export is still to
-> come. See [Status](#status).
+> Early development, not yet released. Everything below works in the editor today; what's
+> left is the first release and the Asset Library listing. See [Status](#status).
 
 ## Contents
 
-[What it does](#what-it-does) · [Status](#status) · [Requirements](#requirements) · [Install](#install) · [What it sends over the network](#what-it-sends-over-the-network) · [Develop](#develop) · [Contributing](#contributing) · [Support](#support) · [Licence](#licence)
+[What it does](#what-it-does) · [Credits for your project](#credits-for-your-project) · [Status](#status) · [Requirements](#requirements) · [Install](#install) · [What it sends over the network](#what-it-sends-over-the-network) · [Develop](#develop) · [Contributing](#contributing) · [Support](#support) · [Licence](#licence)
 
 ## What it does
 
@@ -53,11 +52,32 @@ to the source.
 | ✅ | **See an entry's details**: licence and SPDX id, commercial use, credit, formats and the date the licence was read | Works now |
 | ✅ | **Open an entry**: its source, and its catalog page where the licence is quoted. Only `https://` links are opened | Works now |
 | ✅ | **Copy the recorded credit line**, the same text the catalog page shows | Works now |
-| ⏳ | **Track the assets your project uses** and export a `CREDITS.md` | [#282](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/282) |
+| ✅ | **Keep a list of the assets your project uses**, committed with the project so the whole team shares it | Works now |
+| ✅ | **Export a `CREDITS.md`** worded like the website's export, without touching your own text in the file | Works now |
 
 <p align="center"><img src="docs/images/details.png" alt="The details panel for the ACCAD Open Motion Project: licence CC-BY-3.0, commercial use yes, credit required, formats BVH, C3D, FBX and AMC, verified 2026-08-24, with Open source, Catalog page and Copy credit line buttons" width="360" /></p>
 
 <p align="center"><sub>Select a row to see its details. Copy credit line is turned off, with the reason shown, when there is no line to copy.</sub></p>
+
+## Credits for your project
+
+Select an entry and press **Add to project**; rows your project uses get a ✓, and **Only this
+project's** shows just those. **Export credits** then writes what they owe into `CREDITS.md` at
+the root of your project: credit lines to ship, licence notices to keep with the files, sources
+to check file by file, open questions, and the ones that need nothing.
+
+- **Same wording as the website.** The sections and lines are the website's shortlist export,
+  ported line for line; CI runs both on the whole live catalog and fails if they differ. Each
+  entry links to its catalog page, and the file names the catalog version it was made from.
+- **Your text is kept.** The plugin writes only between
+  `<!-- free-game-dev-assets:start -->` and `<!-- free-game-dev-assets:end -->`. Write your own
+  credits above or below. Exporting again with nothing changed leaves the file as it is.
+- **Nothing is dropped silently.** If the catalog stops listing an entry you use, the export
+  keeps it under **No longer listed**, with the name, licence and credit line from when the
+  plugin last saw it, and asks you to check the licence.
+- **The list is a file in your project**, `free_game_dev_assets.json`. Commit it with
+  `CREDITS.md` so your team works from the same list. If either file is damaged (broken JSON, a
+  missing marker), the plugin says what's wrong and doesn't overwrite it.
 
 ## Status
 
@@ -69,8 +89,8 @@ Planned work is tracked in the catalog repository under
 - [x] Fetch and cache the feed, offline fallback ([#279](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/279))
 - [x] Browse list with search and filters ([#280](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/280))
 - [x] Entry details and actions ([#281](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/281))
-- [ ] Project asset list and `CREDITS.md` export ([#282](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/282))
-- [ ] Tests in CI ([#283](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/283)): running on every push; stays open for the credits-export tests
+- [x] Project asset list and `CREDITS.md` export ([#282](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/282))
+- [x] Tests in CI ([#283](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/283))
 - [ ] Release and Asset Library listing ([#284](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/284))
 
 ## Requirements
@@ -101,7 +121,8 @@ catalog's GitHub Pages site. Nothing about you or your project is sent.
   `If-None-Match` / `If-Modified-Since` validators from the last download, so an unchanged
   catalog comes back as an empty `304`.
 - **Where it saves things:** the catalog goes in the editor's cache folder and the filter
-  settings in the editor's config folder, never in your project.
+  settings in the editor's config folder. The only files it writes in your project are
+  `free_game_dev_assets.json` and `CREDITS.md`, and only when you add an asset or export.
 - **When it can't connect:** it uses the saved copy and says why. A server error, a Wi-Fi login
   page or a catalog format newer than the plugin understands never replaces a good saved copy.
 
@@ -117,6 +138,7 @@ addons/free_game_dev_assets/
   dock.gd           the dock UI
   browse.gd         search, filters, sort and saved filter state (no editor APIs)
   entry_details.gd  what the details panel says, and which links are safe to open (no editor APIs)
+  credits.gd        the project's asset list and CREDITS.md, ported from the website (no editor APIs)
   feed.gd           parses and checks plugin-feed.json (no editor APIs)
   feed_cache.gd     the saved copy and its download metadata
   feed_client.gd    the request, and falling back to the saved copy
@@ -124,6 +146,10 @@ tests/
   run_tests.gd      headless unit tests against a fixture feed
   check_feed_file.gd  checks a downloaded live feed
   fixtures/feed_v1.json
+  editor_e2e.sh     drives the dock in a headless editor: add, export, export again
+  e2e/              the dev-only editor plugin it uses
+  check_credits_match_site.sh  the website's export and the plugin's, compared on the live catalog
+  site_credits.mjs, print_credits.gd  the two sides of that comparison
 tools/
   screenshot.sh     retakes the README screenshot of the dock
   screenshot/       the dev-only editor plugin it uses
@@ -144,6 +170,16 @@ godot --headless --editor --quit-after 300 --verbose --path .
 The output should include `free_game_dev_assets: dock added` and `dock removed`, and no
 `SCRIPT ERROR`.
 
+Two more checks need the live catalog. The end-to-end test adds entries through the dock,
+exports `CREDITS.md` around hand-written text, exports again, and tries damaged files, all on a
+temporary copy of the project. The credits check runs the website's own export code (with
+Node 18+) and the plugin's on every live entry and requires identical output:
+
+```
+tests/editor_e2e.sh
+tests/check_credits_match_site.sh
+```
+
 Retake the README screenshot after changing how the dock looks:
 
 ```
@@ -158,7 +194,7 @@ and your saved dock filters are left alone. It also checks every licence on scre
 cut short it still saves the image but exits with code 2. `tools/screenshot.sh --help` lists
 the options, and `GODOT=/path/to/godot` picks the binary.
 
-[CI](.github/workflows/ci.yml) runs both of these on Godot 4.3 and the latest stable on every
+[CI](.github/workflows/ci.yml) runs the unit tests, the smoke test, the end-to-end test and the credits check on Godot 4.3 and the latest stable on every
 push and every Monday, each on a Godot download pinned by SHA-512. Each run also downloads the
 live `plugin-feed.json` and runs it through the plugin's own parser, so a feed change that would
 break the plugin shows up before users see it. The feed's format is documented in the catalog's

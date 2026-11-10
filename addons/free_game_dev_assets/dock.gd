@@ -11,6 +11,7 @@ signal entry_selected(id: String)
 const FeedClient := preload("feed_client.gd")
 const Browse := preload("browse.gd")
 const Details := preload("entry_details.gd")
+const Credits := preload("credits.gd")
 
 ## Typing waits this long after the last key before the list updates.
 const SEARCH_DELAY_SEC := 0.2
@@ -50,6 +51,16 @@ var _settings_path := ""
 # Details panel.
 var _selected: Dictionary = {}
 var _shown_by_id: Dictionary = {}
+var _d_project: Button
+
+# The project's asset list (res://free_game_dev_assets.json).
+var _project_ids: Array = []
+var _known: Dictionary = {}
+var _list_error := ""
+var _project_label: Label
+var _project_only: CheckBox
+var _export: Button
+var _project_note: Label
 var _details_hint: Label
 var _details: VBoxContainer
 var _d_name: Label
@@ -65,6 +76,7 @@ var _d_verified: Label
 func _ready() -> void:
 	_settings_path = EditorInterface.get_editor_paths().get_config_dir().path_join(Browse.SETTINGS_FILE)
 	filters = Browse.load_filters(_settings_path)
+	_load_list()
 
 	var title := Label.new()
 	title.text = "Free Game Dev Assets"
@@ -86,6 +98,8 @@ func _ready() -> void:
 	bar.add_child(_refresh)
 
 	_build_filters()
+
+	_build_project_row()
 
 	_count = Label.new()
 	add_child(_count)
@@ -149,6 +163,7 @@ func _build_details() -> Control:
 
 	var actions := HFlowContainer.new()
 	_details.add_child(actions)
+	_d_project = _action(actions, "Add to project", "Add this entry to the project's asset list, which Export credits writes into CREDITS.md", _on_toggle_project)
 	_d_open_source = _action(actions, "Open source", "Open the source's own page in your browser", _on_open_source)
 	_d_open_page = _action(actions, "Catalog page", "Open the catalog's page for this entry, where the licence is quoted", _on_open_page)
 	_d_copy = _action(actions, "Copy credit line", "Copy the recorded credit line to the clipboard", _on_copy_credit)
@@ -227,6 +242,7 @@ func _show_details(e: Dictionary) -> void:
 	_d_action_note.text = "\n".join(notes)
 	_d_action_note.visible = not notes.is_empty()
 	_d_verified.text = Details.verified_note(e)
+	_update_project_button()
 
 
 func _on_open_source() -> void:
@@ -340,6 +356,8 @@ func _rebuild() -> void:
 		_count.text = ""
 		_show_details({})
 		return
+	if filters.get("project_only", false):
+		entries = entries.filter(func(e): return _project_ids.has(e["id"]))
 	var shown := Browse.apply(entries, filters)
 	_count.text = "Showing %d of %d" % [shown.size(), entries.size()]
 	var categories: Dictionary = feed.get("categories", {})
@@ -353,6 +371,8 @@ func _rebuild() -> void:
 		if e["id"] == keep_id:
 			keep = item
 		var name := String(e["name"])
+		if _project_ids.has(e["id"]):
+			name = "✓ " + name
 		if e.get("status") == "needs-review":
 			name += "  (needs review)"
 		item.set_text(Col.NAME, name)
@@ -415,7 +435,9 @@ func _on_loaded(state: Dictionary) -> void:
 	_status.text = line if message == "" else "%s\n%s" % [line, message]
 	_fill_options()
 	_fit_columns()
+	_load_list()
 	_rebuild()
+	_update_project_row()
 	feed_changed.emit(feed)
 
 
@@ -432,3 +454,139 @@ func _fit_columns() -> void:
 		widest[Col.LICENSE] = maxf(widest[Col.LICENSE], font.get_string_size(String(e["license"]), HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
 	for col in widest:
 		_tree.set_column_custom_minimum_width(col, ceili(widest[col] + pad))
+
+
+# --- The project's asset list and CREDITS.md ---------------------------------
+
+func _build_project_row() -> void:
+	var row := HFlowContainer.new()
+	add_child(row)
+	_project_label = Label.new()
+	_project_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_project_label)
+	_project_only = _check(row, "Only this project's", "project_only", "Show only the entries in this project's asset list")
+	_export = Button.new()
+	_export.text = "Export credits"
+	_export.tooltip_text = "Write what this project's assets owe into %s. Only the part between the plugin's markers is replaced." % Credits.CREDITS_FILE
+	_export.pressed.connect(_on_export)
+	row.add_child(_export)
+	_project_note = Label.new()
+	_project_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_project_note.visible = false
+	add_child(_project_note)
+	_update_project_row()
+
+
+## Reads the list from the project, so edits from git or by hand show up.
+func _load_list() -> void:
+	var text := ""
+	if FileAccess.file_exists(Credits.LIST_FILE):
+		text = FileAccess.get_file_as_string(Credits.LIST_FILE)
+	var parsed := Credits.parse_list(text)
+	_list_error = parsed["error"]
+	if _list_error == "":
+		_project_ids = parsed["ids"]
+		_known = parsed["known"]
+
+
+func _save_list() -> bool:
+	var text := Credits.list_text(_project_ids, _known)
+	if FileAccess.file_exists(Credits.LIST_FILE) and FileAccess.get_file_as_string(Credits.LIST_FILE) == text:
+		return true
+	if not _write(Credits.LIST_FILE, text):
+		_note("Could not write %s." % Credits.LIST_FILE)
+		return false
+	return true
+
+
+func _write(path: String, text: String) -> bool:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(text)
+	f.close()
+	EditorInterface.get_resource_filesystem().update_file(path)
+	return true
+
+
+func _update_project_row() -> void:
+	if _project_label == null:
+		return
+	if _list_error != "":
+		_project_label.text = "Asset list: error"
+		_note(_list_error)
+	else:
+		var missing := _project_ids.filter(func(id): return not feed.is_empty() and not _has_entry(id)).size()
+		var text := "This project uses %d" % _project_ids.size()
+		if missing > 0:
+			text += " (%d no longer listed)" % missing
+		_project_label.text = text
+	_export.disabled = feed.is_empty() or _list_error != "" or _project_ids.is_empty()
+	_update_project_button()
+
+
+func _has_entry(id: String) -> bool:
+	for e in feed.get("entries", []):
+		if e["id"] == id:
+			return true
+	return false
+
+
+func _update_project_button() -> void:
+	if _d_project == null or _selected.is_empty():
+		return
+	var inside := _project_ids.has(_selected["id"])
+	_d_project.text = "Remove from project" if inside else "Add to project"
+	_d_project.disabled = _list_error != ""
+
+
+func _note(text: String) -> void:
+	_project_note.text = text
+	_project_note.visible = text != ""
+
+
+func _on_toggle_project() -> void:
+	if _selected.is_empty():
+		return
+	_load_list()
+	if _list_error != "":
+		_update_project_row()
+		return
+	var id: String = _selected["id"]
+	if _project_ids.has(id):
+		_project_ids.erase(id)
+		_known.erase(id)
+	else:
+		_project_ids.append(id)
+		_known[id] = Credits.snapshot(_selected)
+	if _save_list():
+		_note("")
+	_rebuild()
+	_update_project_row()
+
+
+func _on_export() -> void:
+	_load_list()
+	if _list_error != "":
+		_update_project_row()
+		return
+	var block := Credits.export_block(_project_ids, _known, feed)
+	var existing := ""
+	if FileAccess.file_exists(Credits.CREDITS_FILE):
+		existing = FileAccess.get_file_as_string(Credits.CREDITS_FILE)
+	var merged := Credits.merge(existing, block["text"])
+	if not merged["ok"]:
+		_note(merged["error"])
+		return
+	_known = block["known"]
+	_save_list()
+	var gone := ""
+	if block["missing"] > 0:
+		gone = " %d no longer listed: see that section." % block["missing"]
+	if merged["text"] == existing:
+		_note("%s is already up to date.%s" % [Credits.CREDITS_FILE.get_file(), gone])
+	elif _write(Credits.CREDITS_FILE, merged["text"]):
+		_note("Wrote %s for %d assets.%s" % [Credits.CREDITS_FILE.get_file(), _project_ids.size(), gone])
+	else:
+		_note("Could not write %s." % Credits.CREDITS_FILE)
+	_update_project_row()

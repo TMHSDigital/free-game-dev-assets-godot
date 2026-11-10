@@ -8,6 +8,7 @@ const Cache := preload("res://addons/free_game_dev_assets/feed_cache.gd")
 const FeedClient := preload("res://addons/free_game_dev_assets/feed_client.gd")
 const Browse := preload("res://addons/free_game_dev_assets/browse.gd")
 const Details := preload("res://addons/free_game_dev_assets/entry_details.gd")
+const Credits := preload("res://addons/free_game_dev_assets/credits.gd")
 
 const FIXTURE := "res://tests/fixtures/feed_v1.json"
 const SCRATCH := "user://test_cache"
@@ -16,13 +17,22 @@ var _passed := 0
 var _failed: Array[String] = []
 
 
+## Runs one group of checks. Each group ends with `return true`, so a script
+## error part-way through (which returns null) fails the run instead of
+## skipping the rest of the group's checks silently.
+func _run(group: String) -> void:
+	if call(group) != true:
+		_failed.append("%s: stopped part-way, see the SCRIPT ERROR above" % group)
+
+
 func _initialize() -> void:
 	_clear_scratch()
-	_test_parse()
-	_test_cache()
-	_test_client()
-	_test_browse()
-	_test_details()
+	_run("_test_parse")
+	_run("_test_cache")
+	_run("_test_client")
+	_run("_test_browse")
+	_run("_test_details")
+	_run("_test_credits")
 	_clear_scratch()
 	if _failed.is_empty():
 		print("tests ok: %d checks" % _passed)
@@ -53,7 +63,7 @@ func fixture_with(changes: Dictionary) -> String:
 
 # --- feed.gd -----------------------------------------------------------------
 
-func _test_parse() -> void:
+func _test_parse() -> bool:
 	var r := Feed.parse(fixture_text())
 	eq("parse: fixture is ok", r["ok"], true)
 	eq("parse: fixture keeps every entry", r["feed"]["entries"].size(), 4)
@@ -84,11 +94,12 @@ func _test_parse() -> void:
 
 	var no_maps := Feed.parse(fixture_with({"categories": null}))
 	eq("parse: missing categories becomes {}", no_maps["feed"]["categories"], {})
+	return true
 
 
 # --- feed_cache.gd -----------------------------------------------------------
 
-func _test_cache() -> void:
+func _test_cache() -> bool:
 	var dir := ProjectSettings.globalize_path(SCRATCH)
 	eq("cache: empty dir has no text", Cache.read_text(dir), "")
 	eq("cache: empty dir has no meta", Cache.read_meta(dir), {})
@@ -104,6 +115,7 @@ func _test_cache() -> void:
 	eq("fresh: clock went backwards is stale", Cache.is_fresh({"fetched_at": 1000.0}, 900.0), false)
 	eq("fresh: no meta is stale", Cache.is_fresh({}, 1000.0), false)
 	_clear_scratch()
+	return true
 
 
 # --- feed_client.gd ----------------------------------------------------------
@@ -117,7 +129,7 @@ func _client() -> Array:
 	return [client, got]
 
 
-func _test_client() -> void:
+func _test_client() -> bool:
 	var body := fixture_text().to_utf8_buffer()
 	var ok := HTTPRequest.RESULT_SUCCESS
 	var dir := ProjectSettings.globalize_path(SCRATCH)
@@ -186,6 +198,7 @@ func _test_client() -> void:
 	eq("client newer format, no cache: source", c[1][0]["source"], "none")
 	eq("client newer format, no cache: says update", c[1][0]["message"].contains("update the plugin"), true)
 	c[0].free()
+	return true
 
 
 # --- browse.gd ---------------------------------------------------------------
@@ -206,7 +219,7 @@ func _browse_entries() -> Array:
 	return entries
 
 
-func _test_browse() -> void:
+func _test_browse() -> bool:
 	var all := _browse_entries()
 	var none := Browse.default_filters()
 	none["godot"] = false
@@ -284,11 +297,12 @@ func _test_browse() -> void:
 	eq("filters: wrong type falls back (bool)", loaded["commercial"], false)
 	eq("filters: wrong type falls back (string)", loaded["category"], "")
 	DirAccess.remove_absolute(path)
+	return true
 
 
 # --- entry_details.gd --------------------------------------------------------
 
-func _test_details() -> void:
+func _test_details() -> bool:
 	var feed: Dictionary = Feed.parse(fixture_text())["feed"]
 	var tileset: Dictionary = feed["entries"][0]   # CC0, no credit
 	var mocap: Dictionary = feed["entries"][2]     # CC-BY-3.0, credit line
@@ -365,6 +379,107 @@ func _test_details() -> void:
 		"Licence as recorded on %s. Check the source before you ship." % tileset["verified"])
 	eq("verified note: no date", Details.verified_note({"verified": null}),
 		"Licence as recorded by the catalog. Check the source before you ship.")
+	return true
+
+
+# --- credits.gd --------------------------------------------------------------
+
+func _credit_entries() -> Array:
+	var base: Dictionary = Feed.parse(fixture_text())["feed"]["entries"][2]  # CC-BY, credit line
+	var make := func(id: String, changes: Dictionary) -> Dictionary:
+		var e: Dictionary = base.duplicate(true)
+		e.merge({"id": id, "name": id.replace("-", " ").capitalize(), "page": "entry/%s/" % id}, true)
+		e.merge(changes, true)
+		return e
+	return [
+		make.call("credit-a", {"credit_line": "Art by A (CC BY 4.0)"}),
+		make.call("template-b", {"credit_line": "\"{title}\" by B (CC BY 4.0)"}),
+		make.call("no-line-c", {"credit_line": null}),
+		make.call("mit-d", {"license": "MIT", "attribution_required": false, "attributionClass": "notice", "credit_line": null}),
+		make.call("cc0-e", {"license": "CC0", "attribution_required": false, "attributionClass": "none", "credit_line": null}),
+		make.call("unknown-f", {"license": "custom", "attribution_required": "unknown", "attributionClass": "any", "credit_line": null}),
+		make.call("varies-g", {"license": "mixed", "commercial": "varies", "attribution_required": false, "attributionClass": "none", "credit_line": null}),
+		make.call("review-h", {"license": "CC0", "status": "needs-review", "attribution_required": false, "attributionClass": "none", "credit_line": null}),
+	]
+
+
+func _test_credits() -> bool:
+	var entries := _credit_entries()
+	var owed := Credits.owes(entries)
+	eq("owes: credits", _ids(owed["credits"]), ["credit-a", "template-b", "no-line-c"])
+	eq("owes: notices", _ids(owed["notices"]), ["mit-d"])
+	eq("owes: no credit leaves out notices", _ids(owed["noCredit"]), ["cc0-e", "varies-g", "review-h"])
+	eq("owes: unclear", _ids(owed["unclear"]), ["unknown-f"])
+	eq("owes: per file", _ids(owed["perFile"]), ["varies-g"])
+	eq("owes: open questions", _ids(owed["openQuestions"]), ["review-h"])
+	eq("owes: duplicate ids listed once", Credits.owes([entries[0], entries[0]])["credits"].size(), 1)
+
+	var page := func(e): return "https://example.org/entry/%s/" % e["id"]
+	var text := Credits.credits_file(owed, {"page_url": page, "date": "2026-11-10", "source": "Free Game Dev Assets", "made_from": "a shortlist"})
+	var lines := text.split("\n")
+	eq("file: title", lines[0], "# Credits")
+	eq("file: intro", lines[2], "Made from a shortlist on Free Game Dev Assets on 2026-11-10. Each licence was checked at its source on the date its catalog entry shows. This is the catalog's reading, not legal advice: re-read the source before you ship.")
+	eq("file: credit line verbatim", lines.has("- Art by A (CC BY 4.0)"), true)
+	eq("file: template header", text.contains("Fill in every {…} field below before you ship. The lines for Template B are templates: put in the work you use."), true)
+	eq("file: no canned line", lines.has("- [No Line C](https://example.org/entry/no-line-c/): no canned credit line; see the entry."), true)
+	eq("file: notice listed", lines.has("- [Mit D](https://example.org/entry/mit-d/) (MIT)"), true)
+	eq("file: sections in the site's order", _order(text, ["## Credits to ship", "## Notices to keep with the files", "## Check each file", "## Open questions", "## Unclear credit", "## No credit needed"]), true)
+	eq("file: no triple newlines", text.contains("\n\n\n"), false)
+	eq("file: ends with one newline", text.ends_with("\n") and not text.ends_with("\n\n"), true)
+	eq("file: empty sections left out", Credits.credits_file(Credits.owes([entries[4]]), {}).contains("## Credits to ship"), false)
+
+	# Project list file.
+	eq("list: empty text is an empty list", Credits.parse_list("")["ids"], [])
+	var parsed := Credits.parse_list('{"format":1,"ids":["a","b",3,"a"],"known":{"a":{"name":"A","license":"MIT","credit_line":null}}}')
+	eq("list: ids kept in order, bad and duplicate dropped", parsed["ids"], ["a", "b"])
+	eq("list: known kept", parsed["known"]["a"]["name"], "A")
+	eq("list: not JSON is an error", Credits.parse_list("{oops")["error"] != "", true)
+	eq("list: newer format is an error", Credits.parse_list('{"format":2,"ids":[]}')["error"].contains("newer"), true)
+	var round := Credits.parse_list(Credits.list_text(["x", "y"], {"x": {"name": "X", "license": "CC0", "credit_line": null}}))
+	eq("list: round trip ids", round["ids"], ["x", "y"])
+	eq("list: round trip known", round["known"]["x"]["license"], "CC0")
+	eq("list: text is stable", Credits.list_text(["x"], {}), Credits.list_text(["x"], {}))
+
+	# The block between the markers.
+	var block := Credits.START + "\nnew\n" + Credits.END + "\n"
+	eq("merge: new file is the block", Credits.merge("", block)["text"], block)
+	var mine := "My own credits\n\n" + Credits.START + "\nold\n" + Credits.END + "\n\nThanks to my friends.\n"
+	var merged := Credits.merge(mine, block)
+	eq("merge: replaces only the block", merged["text"], "My own credits\n\n" + Credits.START + "\nnew\n" + Credits.END + "\n\nThanks to my friends.\n")
+	eq("merge: twice changes nothing", Credits.merge(merged["text"], block)["text"], merged["text"])
+	eq("merge: file without markers gets the block appended", Credits.merge("Hand-written\n", block)["text"], "Hand-written\n\n" + block)
+	eq("merge: start without end is refused", Credits.merge(Credits.START + "\nhalf", block)["ok"], false)
+	eq("merge: two blocks are refused", Credits.merge(block + block, block)["ok"], false)
+	eq("merge: CRLF file keeps CRLF", Credits.merge("Mine\r\n" + Credits.START + "\r\nold\r\n" + Credits.END + "\r\n", block)["text"],
+		"Mine\r\n" + Credits.START + "\r\nnew\r\n" + Credits.END + "\r\n")
+
+	# The whole export.
+	var feed: Dictionary = {"version": "v2026.11.10", "siteUrl": "https://example.org/", "entries": entries}
+	var known := {"gone-z": {"name": "Gone Z", "license": "CC-BY-4.0", "credit_line": "Sound by Z (CC BY 4.0)"}}
+	var out := Credits.export_block(["credit-a", "no-line-c", "gone-z", "never-known"], known, feed)
+	eq("export: has markers", out["text"].begins_with(Credits.START) and out["text"].strip_edges().ends_with(Credits.END), true)
+	eq("export: listed entry credited", out["text"].contains("- Art by A (CC BY 4.0)"), true)
+	eq("export: page links use the feed siteUrl", out["text"].contains("https://example.org/entry/"), true)
+	eq("export: removed id flagged", out["text"].contains("## No longer listed"), true)
+	eq("export: removed id keeps its credit line", out["text"].contains("Sound by Z (CC BY 4.0)"), true)
+	eq("export: removed id says check the licence", out["text"].contains("check the licence"), true)
+	eq("export: unknown id flagged by id", out["text"].contains("`never-known`"), true)
+	eq("export: counts missing", out["missing"], 2)
+	eq("export: snapshot refreshed for listed ids", out["known"]["credit-a"]["credit_line"], "Art by A (CC BY 4.0)")
+	eq("export: snapshot kept for removed ids", out["known"]["gone-z"]["name"], "Gone Z")
+	eq("export: feed version named", out["text"].contains("v2026.11.10"), true)
+	eq("export: same input, same output", Credits.export_block(["credit-a", "no-line-c", "gone-z", "never-known"], known, feed)["text"], out["text"])
+	return true
+
+
+func _order(text: String, parts: Array) -> bool:
+	var at := -1
+	for p in parts:
+		var i := text.find(p)
+		if i <= at:
+			return false
+		at = i
+	return true
 
 
 func _clear_scratch() -> void:

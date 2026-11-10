@@ -17,6 +17,7 @@ static func default_filters() -> Dictionary:
 		"commercial": false,    # only entries with commercial == true
 		"no_credit": false,     # only entries with attribution_required == false
 		"godot": true,          # only entries with "godot" in works_in
+		"project_only": false,  # only entries in the project's asset list (the dock applies it)
 	}
 
 

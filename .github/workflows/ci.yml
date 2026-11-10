@@ -65,6 +65,9 @@ jobs:
           grep -q "free_game_dev_assets: dock added" "$RUNNER_TEMP/editor.log" || { echo "::error::dock was not added"; exit 1; }
           grep -q "free_game_dev_assets: dock removed" "$RUNNER_TEMP/editor.log" || { echo "::error::dock was not removed on exit"; exit 1; }
 
+      - name: Editor end-to-end (asset list and CREDITS.md export)
+        run: tests/editor_e2e.sh
+
       - name: Live feed contract
         run: |
           curl -fsSL --retry 3 --compressed -o "$RUNNER_TEMP/plugin-feed.json" https://tmhsdigital.github.io/Free-Game-Dev-Assets/plugin-feed.json
@@ -72,3 +75,8 @@ jobs:
           status=${PIPESTATUS[0]}
           grep -q "^feed ok:" "$RUNNER_TEMP/feed.log" || { echo "::error::live feed check failed"; exit 1; }
           exit "$status"
+
+      # The plugin's CREDITS.md wording is a port of the website's owes.js;
+      # this runs both on the whole live catalog and fails on any difference.
+      - name: Credits match the website export
+        run: tests/check_credits_match_site.sh

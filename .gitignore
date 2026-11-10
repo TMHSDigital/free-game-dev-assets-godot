@@ -6,3 +6,7 @@ export_presets.cfg
 # OS
 .DS_Store
 Thumbs.db
+
+# Written by the plugin when you use the dock in this dev project
+/free_game_dev_assets.json
+/CREDITS.md
