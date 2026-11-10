@@ -580,14 +580,19 @@ func _on_export() -> void:
 		_note(merged["error"])
 		return
 	_known = block["known"]
-	_save_list()
+	var list_saved := _save_list()
 	var gone := ""
 	if block["missing"] > 0:
 		gone = " %d no longer listed: see that section." % block["missing"]
+	var note := ""
 	if merged["text"] == existing:
-		_note("%s is already up to date.%s" % [Credits.CREDITS_FILE.get_file(), gone])
+		note = "%s is already up to date.%s" % [Credits.CREDITS_FILE.get_file(), gone]
 	elif _write(Credits.CREDITS_FILE, merged["text"]):
-		_note("Wrote %s for %d assets.%s" % [Credits.CREDITS_FILE.get_file(), _project_ids.size(), gone])
+		note = "Wrote %s for %d assets.%s" % [Credits.CREDITS_FILE.get_file(), _project_ids.size(), gone]
 	else:
-		_note("Could not write %s." % Credits.CREDITS_FILE)
+		note = "Could not write %s." % Credits.CREDITS_FILE
+	# Shown after the export result, so a failed list save isn't hidden by it.
+	if not list_saved:
+		note += " Could not save %s." % Credits.LIST_FILE.get_file()
+	_note(note)
 	_update_project_row()

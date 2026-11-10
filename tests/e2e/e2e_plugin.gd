@@ -161,6 +161,16 @@ func _run(dock) -> void:
 	eq("broken list: export off", dock._export.disabled, true)
 	eq("broken list: says why", dock._project_note.text.contains("not valid JSON"), true)
 
+	# A list file that can't be written: the export says so after its result.
+	# A folder in its place fails the write on every OS.
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(Credits.LIST_FILE))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(Credits.CREDITS_FILE))
+	DirAccess.make_dir_absolute(ProjectSettings.globalize_path(Credits.LIST_FILE))
+	dock._on_export()
+	eq("unwritable list: export still reported", dock._project_note.text.begins_with("Wrote CREDITS.md"), true)
+	eq("unwritable list: says so", dock._project_note.text.ends_with("Could not save free_game_dev_assets.json."), true)
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(Credits.LIST_FILE))
+
 	if _failed.is_empty():
 		print("e2e ok: %d checks" % _passed)
 		get_tree().quit(0)

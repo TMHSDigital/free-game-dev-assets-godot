@@ -5,6 +5,13 @@ All notable changes to the Free Game Dev Assets plugin for Godot. Versions follo
 plugin's files in your project (`free_game_dev_assets.json`, the `CREDITS.md` block) are written,
 and the changelog will say so.
 
+## Unreleased
+
+### Fixed
+
+- **Export credits** now says when it could not save `free_game_dev_assets.json`, instead of
+  showing only the export result.
+
 ## 0.1.0 (2026-11-09)
 
 The first release. Requires Godot 4.3 or later.
