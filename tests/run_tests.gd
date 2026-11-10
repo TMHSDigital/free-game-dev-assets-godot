@@ -17,6 +17,16 @@ var _passed := 0
 var _failed: Array[String] = []
 
 
+## A feed client whose request is recorded instead of sent.
+class FakeClient extends "res://addons/free_game_dev_assets/feed_client.gd":
+	var sent: Array = []  # the headers of each request started
+	var send_error := OK
+
+	func _send(_request_url: String, headers: PackedStringArray) -> int:
+		sent.append(headers)
+		return send_error
+
+
 ## Runs one group of checks. Each group ends with `return true`, so a script
 ## error part-way through (which returns null) fails the run instead of
 ## skipping the rest of the group's checks silently.
@@ -30,6 +40,7 @@ func _initialize() -> void:
 	_run("_test_parse")
 	_run("_test_cache")
 	_run("_test_client")
+	_run("_test_client_request")
 	_run("_test_browse")
 	_run("_test_details")
 	_run("_test_credits")
@@ -198,6 +209,79 @@ func _test_client() -> bool:
 	eq("client newer format, no cache: source", c[1][0]["source"], "none")
 	eq("client newer format, no cache: says update", c[1][0]["message"].contains("update the plugin"), true)
 	c[0].free()
+	return true
+
+
+## refresh(): when it asks the network, and with which headers. FakeClient
+## records the request instead of sending it.
+func _fake_client() -> Array:
+	var client := FakeClient.new()
+	client.cache_dir = ProjectSettings.globalize_path(SCRATCH)
+	var got: Array = []
+	client.loaded.connect(func(state): got.append(state))
+	return [client, got]
+
+
+func _test_client_request() -> bool:
+	var dir := ProjectSettings.globalize_path(SCRATCH)
+	var ua := "User-Agent: " + FeedClient.USER_AGENT
+	var stale := {"etag": "\"v1\"", "last_modified": "Mon, 09 Nov 2026 00:00:00 GMT", "fetched_at": 0.0}
+
+	eq("headers: no cache, only the User-Agent", FeedClient.request_headers(false, stale), PackedStringArray([ua]))
+	eq("headers: cache with validators", FeedClient.request_headers(true, stale), PackedStringArray([
+		ua, "If-None-Match: \"v1\"", "If-Modified-Since: Mon, 09 Nov 2026 00:00:00 GMT"]))
+	eq("headers: cache without validators", FeedClient.request_headers(true, {}), PackedStringArray([ua]))
+
+	# A stale cache: one request, with its validators; busy until it answers.
+	_clear_scratch()
+	Cache.write(dir, fixture_text(), stale)
+	var c := _fake_client()
+	c[0].refresh()
+	eq("stale cache: one request", c[0].sent.size(), 1)
+	eq("stale cache: sends the validators", c[0].sent[0], FeedClient.request_headers(true, stale))
+	eq("stale cache: nothing reported yet", c[1].size(), 0)
+	eq("stale cache: busy", c[0].is_busy(), true)
+	c[0].refresh()
+	eq("busy: a second refresh sends nothing", c[0].sent.size(), 1)
+	eq("busy: and reports nothing", c[1].size(), 0)
+	c[0]._on_request_completed(HTTPRequest.RESULT_SUCCESS, 304, PackedStringArray(), PackedByteArray())
+	eq("answered: no longer busy", c[0].is_busy(), false)
+	eq("answered: reported once", c[1].size(), 1)
+	c[0].free()
+
+	# Meta left behind without a body: no validators, or the server could
+	# answer 304 with nothing to show.
+	_clear_scratch()
+	Cache.write_meta(dir, stale)
+	c = _fake_client()
+	c[0].refresh()
+	eq("meta without a body: only the User-Agent", c[0].sent[0], PackedStringArray([ua]))
+	# Should a 304 come anyway, there is nothing to show: say so.
+	c[0]._on_request_completed(HTTPRequest.RESULT_SUCCESS, 304, PackedStringArray(), PackedByteArray())
+	eq("304 without a cache: source", c[1][0]["source"], "none")
+	eq("304 without a cache: says why", c[1][0]["message"].contains("304"), true)
+	c[0].free()
+
+	# A fresh cache: no request, unless forced (the Refresh button).
+	_clear_scratch()
+	Cache.write(dir, fixture_text(), {"etag": "\"v1\"", "fetched_at": Time.get_unix_time_from_system()})
+	c = _fake_client()
+	c[0].refresh()
+	eq("fresh cache: no request", c[0].sent.size(), 0)
+	c[0].refresh(true)
+	eq("fresh cache, forced: one request", c[0].sent.size(), 1)
+	eq("fresh cache, forced: sends the validators", c[0].sent[0].has("If-None-Match: \"v1\""), true)
+	c[0].free()
+
+	# The request can't start: not left busy, the cache is shown with the reason.
+	c = _fake_client()
+	c[0].send_error = ERR_CANT_CONNECT
+	c[0].refresh(true)
+	eq("can't start: not busy", c[0].is_busy(), false)
+	eq("can't start: shows the cache", c[1][0]["source"], "cache")
+	eq("can't start: says why", c[1][0]["message"].contains("could not start"), true)
+	c[0].free()
+	_clear_scratch()
 	return true
 
 

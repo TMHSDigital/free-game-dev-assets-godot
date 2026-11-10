@@ -46,18 +46,29 @@ func refresh(force := false) -> void:
 	if not force and cached["ok"] and Cache.is_fresh(meta, _now()):
 		loaded.emit(_state(cached["feed"], "cache", ""))
 		return
+	_busy = true
+	var err := _send(url, request_headers(cached["ok"], meta))
+	if err != OK:
+		_busy = false
+		_fall_back(cached, "the request could not start (error %d)" % err)
+
+
+## The request headers: the User-Agent, plus the cached copy's validators.
+## Validators only make sense when there is a cached body to fall back on.
+static func request_headers(has_cache: bool, meta: Dictionary) -> PackedStringArray:
 	var headers := PackedStringArray(["User-Agent: " + USER_AGENT])
-	# Validators only make sense when there is a cached body to fall back on.
-	if cached["ok"]:
+	if has_cache:
 		if String(meta.get("etag", "")) != "":
 			headers.append("If-None-Match: " + String(meta["etag"]))
 		if String(meta.get("last_modified", "")) != "":
 			headers.append("If-Modified-Since: " + String(meta["last_modified"]))
-	_busy = true
-	var err := _http.request(url, headers)
-	if err != OK:
-		_busy = false
-		_fall_back(cached, "the request could not start (error %d)" % err)
+	return headers
+
+
+## Starts the request. The one place that touches the network, so tests can
+## override it.
+func _send(request_url: String, headers: PackedStringArray) -> int:
+	return _http.request(request_url, headers)
 
 
 func _on_request_completed(result: int, code: int, headers: PackedStringArray, body: PackedByteArray) -> void:
