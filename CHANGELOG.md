@@ -5,7 +5,7 @@ All notable changes to the Free Game Dev Assets plugin for Godot. Versions follo
 plugin's files in your project (`free_game_dev_assets.json`, the `CREDITS.md` block) are written,
 and the changelog will say so.
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-11-09)
 
 The first release. Requires Godot 4.3 or later.
 
