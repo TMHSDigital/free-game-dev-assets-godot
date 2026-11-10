@@ -1,0 +1,12 @@
+# Normalise line endings
+* text=auto eol=lf
+*.png binary
+*.svg text
+
+# Godot Asset Library downloads the repo archive: ship only the addon.
+/.gitattributes export-ignore
+/.gitignore export-ignore
+/.github export-ignore
+/README.md export-ignore
+/tests export-ignore
+/project export-ignore
