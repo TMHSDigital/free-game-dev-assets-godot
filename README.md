@@ -18,7 +18,7 @@ Early development. Planned work is tracked in [TMHSDigital/Free-Game-Dev-Assets#
 
 - [x] Plugin feed published by the catalog build ([#277](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/277))
 - [x] Skeleton addon with an empty dock ([#278](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/278))
-- [ ] Fetch and cache the feed, offline fallback ([#279](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/279))
+- [x] Fetch and cache the feed, offline fallback ([#279](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/279))
 - [ ] Browse list with search and filters ([#280](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/280))
 - [ ] Entry details and actions ([#281](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/281))
 - [ ] Project asset list and `CREDITS.md` export ([#282](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/282))
@@ -42,6 +42,14 @@ godot --headless --editor --quit-after 120 --verbose --path .
 ```
 
 The output should include `free_game_dev_assets: dock added` and no `SCRIPT ERROR`. `project.godot` is left out of the Asset Library download.
+
+Unit tests (no network, no editor):
+
+```
+godot --headless --path . --script tests/run_tests.gd
+```
+
+The plugin reads [`plugin-feed.json`](https://tmhsdigital.github.io/Free-Game-Dev-Assets/plugin-feed.json) ([format notes](https://github.com/TMHSDigital/Free-Game-Dev-Assets/blob/main/docs/data.md#plugin-feed)). It caches the feed in the editor's cache folder, not in your project, and checks for a newer one at most once a day, or whenever you press Refresh.
 
 ## Licence
 
