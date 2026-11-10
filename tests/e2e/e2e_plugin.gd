@@ -7,8 +7,6 @@ extends EditorPlugin
 
 const Credits := preload("res://addons/free_game_dev_assets/credits.gd")
 const TIMEOUT_SEC := 60.0
-## Credit required with a line, MIT notice, CC0 no credit.
-const PICKS := ["accad-mocap", "beehave", "ox72-dungeon-tileset"]
 const MINE_ABOVE := "# My game\n\nMusic and art I made myself.\n\n"
 const MINE_BELOW := "\nThanks to everyone who play-tested.\n"
 
@@ -51,6 +49,28 @@ func _entry(dock, id: String) -> Dictionary:
 	return {}
 
 
+## Three entries the export puts in different sections: credit required with
+## a line, a licence notice, and no credit needed. Chosen from the live feed
+## by what they are, not by id, so an ordinary catalog edit can't break the
+## test. An empty id means the catalog has none of that kind.
+func _picks(feed: Dictionary) -> Array:
+	var kinds := [
+		func(e): return e.get("attribution_required") == true and e.get("attributionClass") != "notice" \
+			and typeof(e.get("credit_line")) == TYPE_STRING and e["credit_line"] != "",
+		func(e): return e.get("attributionClass") == "notice",
+		func(e): return e.get("attribution_required") == false and e.get("attributionClass") != "notice",
+	]
+	var out := []
+	for kind in kinds:
+		var id := ""
+		for e in feed["entries"]:
+			if kind.call(e):
+				id = e["id"]
+				break
+		out.append(id)
+	return out
+
+
 func _select(dock, id: String) -> void:
 	# The way a click does it: the row's selection handler.
 	dock.filters["query"] = ""
@@ -78,29 +98,39 @@ func _run(dock) -> void:
 	eq("starts with an empty list", dock._project_ids, [])
 	eq("export is off with nothing added", dock._export.disabled, true)
 
+	var picks := _picks(dock.feed)
+	if picks.has(""):
+		printerr("e2e: the catalog has no entry of one kind the test needs (credit line, notice, no credit): %s" % [picks])
+		get_tree().quit(1)
+		return
+	var credited: String = picks[0]
+	var notice: String = picks[1]
+	var no_credit: String = picks[2]
+	print("e2e picks: %s" % ", ".join(picks))
+
 	# Add three entries through the details panel.
-	for id in PICKS:
+	for id in picks:
 		_select(dock, id)
 		eq("button offers Add for %s" % id, dock._d_project.text, "Add to project")
 		dock._d_project.pressed.emit()
 		eq("button offers Remove for %s" % id, dock._d_project.text, "Remove from project")
 	var saved := Credits.parse_list(_read(Credits.LIST_FILE))
-	eq("list file has the picks, in order", saved["ids"], PICKS)
-	eq("list file keeps a snapshot", saved["known"]["accad-mocap"]["credit_line"], _entry(dock, "accad-mocap")["credit_line"])
+	eq("list file has the picks, in order", saved["ids"], picks)
+	eq("list file keeps a snapshot", saved["known"][credited]["credit_line"], _entry(dock, credited)["credit_line"])
 	eq("project row counts them", dock._project_label.text, "This project uses 3")
 
 	# Only this project's.
 	dock.filters["project_only"] = true
 	dock.filters["godot"] = false
 	dock._rebuild()
-	eq("Only this project's shows the picks", dock._tree.get_root().get_child_count(), PICKS.size())
+	eq("Only this project's shows the picks", dock._tree.get_root().get_child_count(), picks.size())
 	dock.filters["project_only"] = false
 	dock._rebuild()
 
 	# Remove and re-add one.
-	_select(dock, "beehave")
+	_select(dock, notice)
 	dock._d_project.pressed.emit()
-	eq("remove takes it off the list", Credits.parse_list(_read(Credits.LIST_FILE))["ids"], ["accad-mocap", "ox72-dungeon-tileset"])
+	eq("remove takes it off the list", Credits.parse_list(_read(Credits.LIST_FILE))["ids"], [credited, no_credit])
 	dock._d_project.pressed.emit()
 
 	# Export into a CREDITS.md that already has the user's own text.
@@ -111,9 +141,9 @@ func _run(dock) -> void:
 	var first := _read(Credits.CREDITS_FILE)
 	eq("export keeps the user's text above", first.begins_with(MINE_ABOVE + "Old notes.\n" + MINE_BELOW), true)
 	eq("export adds one block", first.count(Credits.START), 1)
-	eq("credit line verbatim", first.contains("- " + _entry(dock, "accad-mocap")["credit_line"]), true)
-	eq("MIT entry under notices", first.contains("## Notices to keep with the files"), true)
-	eq("CC0 entry under no credit", first.contains("## No credit needed"), true)
+	eq("credit line verbatim", first.contains("- " + _entry(dock, credited)["credit_line"]), true)
+	eq("notice entry under notices", first.contains("## Notices to keep with the files"), true)
+	eq("no-credit entry under no credit", first.contains("## No credit needed"), true)
 	eq("names the catalog version", first.contains(dock.feed["version"]), true)
 	eq("says it wrote the file", dock._project_note.text.begins_with("Wrote CREDITS.md"), true)
 
@@ -155,7 +185,7 @@ func _run(dock) -> void:
 	f = FileAccess.open(Credits.LIST_FILE, FileAccess.WRITE)
 	f.store_string("{not json")
 	f.close()
-	_select(dock, "beehave")
+	_select(dock, notice)
 	dock._d_project.pressed.emit()
 	eq("broken list: file untouched", _read(Credits.LIST_FILE), "{not json")
 	eq("broken list: export off", dock._export.disabled, true)
