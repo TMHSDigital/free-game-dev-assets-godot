@@ -1,0 +1,12 @@
+; Development project: open this folder in Godot to work on the plugin.
+; Not part of the addon download (see .gitattributes).
+
+config_version=5
+
+[application]
+
+config/name="Free Game Dev Assets (plugin dev)"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/free_game_dev_assets/plugin.cfg")

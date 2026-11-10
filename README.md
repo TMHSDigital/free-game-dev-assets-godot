@@ -33,6 +33,16 @@ Godot 4.3 or later. GDScript only: no GDExtension and no C#.
 
 From the Godot Asset Library, or by copying `addons/free_game_dev_assets/` into your project. Then turn it on under **Project → Project Settings → Plugins**.
 
+## Develop
+
+The repo root is a small Godot project with the plugin turned on. Open the folder in Godot 4.3 or later and the "Free Assets" dock appears on the right. To check from a terminal that it loads cleanly:
+
+```
+godot --headless --editor --quit-after 120 --verbose --path .
+```
+
+The output should include `free_game_dev_assets: dock added` and no `SCRIPT ERROR`. `project.godot` is left out of the Asset Library download.
+
 ## Licence
 
 Plugin code: [MIT](LICENSE). Catalog data: [CC0 1.0](https://github.com/TMHSDigital/Free-Game-Dev-Assets/blob/main/LICENSE). The assets the catalog lists keep their own licences.
