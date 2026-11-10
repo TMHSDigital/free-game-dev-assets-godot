@@ -558,6 +558,19 @@ func _test_credits() -> bool:
 	eq("export: has markers", out["text"].begins_with(Credits.START) and out["text"].strip_edges().ends_with(Credits.END), true)
 	eq("export: listed entry credited", out["text"].contains("- Art by A (CC BY 4.0)"), true)
 	eq("export: page links use the feed siteUrl", out["text"].contains("https://example.org/entry/"), true)
+	# Links follow the entry's `page`, the same rule as the Catalog page button.
+	var moved: Array = entries.map(func(e):
+		var m: Dictionary = e.duplicate()
+		m["page"] = "assets/%s.html" % e["id"]
+		return m)
+	var moved_feed := {"version": "v2026.11.10", "siteUrl": "https://example.org/", "entries": moved}
+	eq("export: links follow the feed's page", Credits.export_block(["credit-a", "mit-d"], {}, moved_feed)["text"].contains("(https://example.org/assets/mit-d.html)"), true)
+	var unsafe: Array = entries.map(func(e):
+		var m: Dictionary = e.duplicate()
+		m["page"] = "https://evil.example/"
+		return m)
+	var unsafe_text: String = Credits.export_block(["mit-d"], {}, {"version": "v1", "siteUrl": "https://example.org/", "entries": unsafe})["text"]
+	eq("export: an unsafe page gives no link", unsafe_text.contains("evil.example") or unsafe_text.contains("[Mit D]"), false)
 	eq("export: removed id flagged", out["text"].contains("## No longer listed"), true)
 	eq("export: removed id keeps its credit line", out["text"].contains("Sound by Z (CC BY 4.0)"), true)
 	eq("export: removed id says check the licence", out["text"].contains("check the licence"), true)

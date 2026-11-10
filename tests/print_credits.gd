@@ -20,9 +20,9 @@ func _initialize() -> void:
 		quit(1)
 		return
 	var feed: Dictionary = parsed["feed"]
-	var site := String(feed["siteUrl"]).trim_suffix("/")
+	# The plugin's own link rule, so a difference from the site's links fails the diff.
 	var text := Credits.credits_file(Credits.owes(feed["entries"]), {
-		"page_url": func(e): return "%s/entry/%s/" % [site, String(e["id"]).uri_encode()],
+		"page_url": Credits.page_url(feed),
 		"date": "",
 		"source": "Free Game Dev Assets",
 		"made_from": "a shortlist",

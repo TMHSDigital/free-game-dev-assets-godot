@@ -13,6 +13,8 @@ const LIST_FILE := "res://free_game_dev_assets.json"
 const CREDITS_FILE := "res://CREDITS.md"
 const LIST_FORMAT := 1
 
+const Details := preload("entry_details.gd")
+
 const START := "<!-- free-game-dev-assets:start -->"
 const END := "<!-- free-game-dev-assets:end -->"
 
@@ -175,6 +177,13 @@ static func snapshot(e: Dictionary) -> Dictionary:
 
 # --- CREDITS.md ----------------------------------------------------------------
 
+## Links each entry to its catalog page, by the same rule as the dock's
+## Catalog page button: the feed's `page`, or no link when it looks unsafe.
+static func page_url(feed: Dictionary) -> Callable:
+	return func(e: Dictionary) -> String:
+		return Details.catalog_page_url(feed, e)
+
+
 ## The marked block for the project's list. Returns {text, known, missing}:
 ## `known` is the refreshed snapshot to save back to the list file, and
 ## `missing` counts ids the feed no longer lists.
@@ -182,10 +191,6 @@ static func export_block(ids: Array, known: Dictionary, feed: Dictionary) -> Dic
 	var by_id := {}
 	for e in feed.get("entries", []):
 		by_id[e["id"]] = e
-	var site := String(feed.get("siteUrl", "")).trim_suffix("/")
-	var page_url := func(e: Dictionary) -> String:
-		return "%s/entry/%s/" % [site, String(e["id"]).uri_encode()] if site.begins_with("https://") else ""
-
 	var listed: Array = []
 	var gone: Array = []
 	var new_known := {}
@@ -199,7 +204,7 @@ static func export_block(ids: Array, known: Dictionary, feed: Dictionary) -> Dic
 				new_known[id] = known[id]
 
 	var body := credits_file(owes(listed), {
-		"page_url": page_url,
+		"page_url": page_url(feed),
 		"source": "Free Game Dev Assets",
 		"made_from": "this project's asset list",
 	})
