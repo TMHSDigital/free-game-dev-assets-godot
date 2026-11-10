@@ -326,6 +326,18 @@ func _test_browse() -> bool:
 	eq("browse: licence family", _ids(Browse.apply(all, f)), ["beehave", "als-community"])
 
 	f = none.duplicate()
+	f["format"] = "FBX"
+	eq("browse: format", _ids(Browse.apply(all, f)), ["accad-mocap", "nc-pack"])
+	f["format"] = "no-such-format"
+	eq("browse: unknown format matches nothing", Browse.apply(all, f), [])
+	eq("browse: format default is any", Browse.default_filters()["format"], "")
+
+	var labels := Browse.format_labels([
+		{"formats": ["PNG", "WAV"]}, {"formats": ["png", "PNG"]}, {"formats": ["OGG", "WAV", ""]}, {"formats": []}, {}])
+	eq("format menu: most used first, then by name, with counts", labels.keys(), ["PNG", "WAV", "OGG", "png"])
+	eq("format menu: label", labels["PNG"], "PNG (2)")
+
+	f = none.duplicate()
 	f["commercial"] = true
 	eq("browse: commercial use OK", _ids(Browse.apply(all, f)).has("nc-pack"), false)
 	eq("browse: commercial keeps the others", Browse.apply(all, f).size(), 4)

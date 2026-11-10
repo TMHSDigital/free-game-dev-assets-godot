@@ -49,7 +49,7 @@ your project, not in the folder, so they are kept. [CHANGELOG.md](CHANGELOG.md) 
 
 - **Browse** the catalog in a **Free Assets** dock, entries made for Godot first.
 - **Search** by name, tags, publisher and summary.
-- **Filter** by category, licence family, commercial use, "no credit needed" and "works in Godot"
+- **Filter** by category, licence family, file format, commercial use, "no credit needed" and "works in Godot"
   (on by default). The filters are kept between editor sessions.
 - **See the licence on every row** as text, on a background coloured by licence family, with
   entries still under review marked.

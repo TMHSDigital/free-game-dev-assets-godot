@@ -17,6 +17,7 @@ static func default_filters() -> Dictionary:
 		"query": "",
 		"category": "",         # "" means any
 		"license_family": "",   # "" means any
+		"format": "",           # "" means any; else one value of an entry's formats
 		"commercial": false,    # only entries with commercial == true
 		"no_credit": false,     # only entries with attribution_required == false
 		"godot": true,          # only entries with "godot" in works_in
@@ -30,11 +31,14 @@ static func apply(entries: Array, filters: Dictionary) -> Array:
 	var words := _words(String(filters.get("query", "")))
 	var category := String(filters.get("category", ""))
 	var family := String(filters.get("license_family", ""))
+	var format := String(filters.get("format", ""))
 	var out: Array = []
 	for e in entries:
 		if category != "" and e.get("category") != category:
 			continue
 		if family != "" and e.get("licenseFamily") != family:
+			continue
+		if format != "" and not e.get("formats", []).has(format):
 			continue
 		if filters.get("commercial", false) and e.get("commercial") != true:
 			continue
@@ -53,6 +57,23 @@ static func apply(entries: Array, filters: Dictionary) -> Array:
 				continue
 		out.append(e)
 	out.sort_custom(_before)
+	return out
+
+
+## The format menu: every format the entries use, mapped to its label with
+## the number of entries ("PNG (98)"), most used first, then by name.
+static func format_labels(entries: Array) -> Dictionary:
+	var counts := {}
+	for e in entries:
+		for f in e.get("formats", []):
+			if typeof(f) == TYPE_STRING and f != "":
+				counts[f] = counts.get(f, 0) + 1
+	var names := counts.keys()
+	names.sort_custom(func(a, b):
+		return a.naturalnocasecmp_to(b) < 0 if counts[a] == counts[b] else counts[a] > counts[b])
+	var out := {}
+	for f in names:
+		out[f] = "%s (%d)" % [f, counts[f]]
 	return out
 
 

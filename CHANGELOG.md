@@ -9,6 +9,9 @@ and the changelog will say so.
 
 ### Added
 
+- A file format filter next to category and licence, listing every format in the catalog with
+  how many entries have it, most common first.
+
 - Entries in your asset list whose licence or credit line changed in the catalog since you
   added them are marked "changed since added": the project row counts them, the details say
   what the old terms were, and **Export credits** names them when it writes the new terms.

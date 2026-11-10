@@ -41,6 +41,7 @@ var _search: LineEdit
 var _search_timer: Timer
 var _category: OptionButton
 var _family: OptionButton
+var _format: OptionButton
 var _commercial: CheckBox
 var _no_credit: CheckBox
 var _godot: CheckBox
@@ -306,6 +307,12 @@ func _build_filters() -> void:
 	_family.clip_text = true
 	_family.item_selected.connect(func(i): _set_filter("license_family", String(_family.get_item_metadata(i))))
 	row.add_child(_family)
+	_format = OptionButton.new()
+	_format.tooltip_text = "File format"
+	_format.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_format.clip_text = true
+	_format.item_selected.connect(func(i): _set_filter("format", String(_format.get_item_metadata(i))))
+	row.add_child(_format)
 	_fill_options()
 
 	var checks := HFlowContainer.new()
@@ -325,11 +332,13 @@ func _check(parent: Control, text: String, key: String, tip: String) -> CheckBox
 	return box
 
 
-## Fills the category and licence family menus from the feed's label maps.
+## Fills the category and licence family menus from the feed's label maps,
+## and the format menu from the formats its entries use.
 ## A saved choice the feed no longer has falls back to "any".
 func _fill_options() -> void:
 	_fill_option(_category, "All categories", feed.get("categories", {}), "category")
 	_fill_option(_family, "All licences", feed.get("licenseFamilies", {}), "license_family")
+	_fill_option(_format, "All formats", Browse.format_labels(feed.get("entries", [])), "format")
 
 
 func _fill_option(menu: OptionButton, any_label: String, labels: Dictionary, key: String) -> void:
