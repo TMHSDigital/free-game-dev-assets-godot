@@ -13,7 +13,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-lightgrey.svg)](LICENSE)
 [![Sponsor](https://img.shields.io/badge/Sponsor-TMHSDigital-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/TMHSDigital)
 
-<img src="docs/images/dock.png" alt="The Free Assets dock in the Godot editor: a search for &quot;pixel&quot; showing 50 of 419 entries, each row with its name, category and a licence badge such as CC0, SIL OFL, CC-BY-4.0, GPL-3.0-or-later or custom" width="420" />
+<img src="docs/images/dock.png" alt="The Free Assets dock in the Godot editor: a search for &quot;pixel&quot; showing 50 of 420 entries, each row with its name, category and a licence badge such as CC0, SIL OFL, CC-BY-4.0, GPL-3.0-or-later or custom" width="420" />
 
 <sub>The dock in Godot 4.7, searching for "pixel". The licence is written on every row; the colour only groups licence families.</sub>
 
