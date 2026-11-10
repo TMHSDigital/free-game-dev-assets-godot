@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Mondays, after the catalog's weekly runs: catches a breaking feed change.
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  godot:
+    name: Godot ${{ matrix.version }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The minimum supported version and the latest stable. The SHA-512s
+          # are the official ones from each release's SHA512-SUMS.txt, pinned
+          # here so a swapped download fails instead of running.
+          - version: 4.3-stable
+            sha512: fd52bb4ba8acc30ca5accd1c566d470ad7282f891ccc0995dfafabcf92bcf76280ce182bf9d80ebd885f3ed2165d01e1fc3f2928436b15498dfbd98656c2a45a
+          - version: 4.7.2-stable
+            sha512: 9aa00f7a605200940bce3027a567b782f49bd8e940dd06ae9e987bd65aee1b1467edd56ed84fcdcbdd44354bf613bdbb4e5d2913e925850368e150c59ed54c65
+    env:
+      GODOT_VERSION: ${{ matrix.version }}
+      GODOT_SHA512: ${{ matrix.sha512 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Godot
+        run: |
+          zip="Godot_v${GODOT_VERSION}_linux.x86_64.zip"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/godot.zip" "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/${zip}"
+          echo "${GODOT_SHA512}  $RUNNER_TEMP/godot.zip" | sha512sum -c -
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          mv "$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}_linux.x86_64" "$RUNNER_TEMP/godot/godot"
+          echo "$RUNNER_TEMP/godot" >> "$GITHUB_PATH"
+
+      - name: Import the project
+        run: godot --headless --editor --quit --path . || true
+
+      # Godot can exit 0 after a script error, so every step also reads the log.
+      - name: Unit tests
+        run: |
+          godot --headless --path . --script tests/run_tests.gd 2>&1 | tee "$RUNNER_TEMP/tests.log"
+          status=${PIPESTATUS[0]}
+          if grep -qE "SCRIPT ERROR|Parse Error|Failed to load script" "$RUNNER_TEMP/tests.log"; then echo "::error::script error in tests"; exit 1; fi
+          grep -q "^tests ok:" "$RUNNER_TEMP/tests.log" || { echo "::error::tests did not report ok"; exit 1; }
+          exit "$status"
+
+      - name: Editor smoke test (plugin loads and unloads)
+        run: |
+          godot --headless --editor --quit-after 300 --verbose --path . > "$RUNNER_TEMP/editor.log" 2>&1 || true
+          grep -E "free_game_dev_assets|SCRIPT ERROR|Parse Error" "$RUNNER_TEMP/editor.log" || true
+          if grep -qE "SCRIPT ERROR|Parse Error|Failed to load script" "$RUNNER_TEMP/editor.log"; then echo "::error::script error in the editor"; exit 1; fi
+          grep -q "free_game_dev_assets: dock added" "$RUNNER_TEMP/editor.log" || { echo "::error::dock was not added"; exit 1; }
+          grep -q "free_game_dev_assets: dock removed" "$RUNNER_TEMP/editor.log" || { echo "::error::dock was not removed on exit"; exit 1; }
+
+      - name: Live feed contract
+        run: |
+          curl -fsSL --retry 3 --compressed -o "$RUNNER_TEMP/plugin-feed.json" https://tmhsdigital.github.io/Free-Game-Dev-Assets/plugin-feed.json
+          godot --headless --path . --script tests/check_feed_file.gd -- "$RUNNER_TEMP/plugin-feed.json" 2>&1 | tee "$RUNNER_TEMP/feed.log"
+          status=${PIPESTATUS[0]}
+          grep -q "^feed ok:" "$RUNNER_TEMP/feed.log" || { echo "::error::live feed check failed"; exit 1; }
+          exit "$status"

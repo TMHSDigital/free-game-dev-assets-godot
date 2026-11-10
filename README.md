@@ -22,7 +22,7 @@ Early development. Planned work is tracked in [TMHSDigital/Free-Game-Dev-Assets#
 - [ ] Browse list with search and filters ([#280](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/280))
 - [ ] Entry details and actions ([#281](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/281))
 - [ ] Project asset list and `CREDITS.md` export ([#282](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/282))
-- [ ] Tests in CI ([#283](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/283))
+- [x] Tests in CI ([#283](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/283))
 - [ ] Release and Asset Library listing ([#284](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/284))
 
 ## Requirements
