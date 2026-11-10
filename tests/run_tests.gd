@@ -7,6 +7,7 @@ const Feed := preload("res://addons/free_game_dev_assets/feed.gd")
 const Cache := preload("res://addons/free_game_dev_assets/feed_cache.gd")
 const FeedClient := preload("res://addons/free_game_dev_assets/feed_client.gd")
 const Browse := preload("res://addons/free_game_dev_assets/browse.gd")
+const Details := preload("res://addons/free_game_dev_assets/entry_details.gd")
 
 const FIXTURE := "res://tests/fixtures/feed_v1.json"
 const SCRATCH := "user://test_cache"
@@ -21,6 +22,7 @@ func _initialize() -> void:
 	_test_cache()
 	_test_client()
 	_test_browse()
+	_test_details()
 	_clear_scratch()
 	if _failed.is_empty():
 		print("tests ok: %d checks" % _passed)
@@ -282,6 +284,87 @@ func _test_browse() -> void:
 	eq("filters: wrong type falls back (bool)", loaded["commercial"], false)
 	eq("filters: wrong type falls back (string)", loaded["category"], "")
 	DirAccess.remove_absolute(path)
+
+
+# --- entry_details.gd --------------------------------------------------------
+
+func _test_details() -> void:
+	var feed: Dictionary = Feed.parse(fixture_text())["feed"]
+	var tileset: Dictionary = feed["entries"][0]   # CC0, no credit
+	var mocap: Dictionary = feed["entries"][2]     # CC-BY-3.0, credit line
+
+	eq("https: plain", Details.is_https("https://example.com/x"), true)
+	eq("https: http refused", Details.is_https("http://mocap.cs.cmu.edu"), false)
+	eq("https: javascript refused", Details.is_https("javascript:alert(1)"), false)
+	eq("https: file refused", Details.is_https("file:///C:/Windows"), false)
+	eq("https: no host refused", Details.is_https("https://"), false)
+	eq("https: path-only host refused", Details.is_https("https:///etc/passwd"), false)
+	eq("https: whitespace refused", Details.is_https("https://example.com/a b"), false)
+	eq("https: newline refused", Details.is_https("https://example.com/\nfile:///x"), false)
+	eq("https: upper-case scheme refused", Details.is_https("HTTPS://example.com"), false)
+	eq("https: not a string", Details.is_https(null), false)
+
+	eq("source url: https kept", Details.source_url(tileset), tileset["url"])
+	var http_entry := tileset.duplicate()
+	http_entry["url"] = "http://www.makehumancommunity.org"
+	eq("source url: http refused", Details.source_url(http_entry), "")
+
+	eq("catalog page: joined to siteUrl", Details.catalog_page_url(feed, tileset),
+		"https://tmhsdigital.github.io/Free-Game-Dev-Assets/entry/ox72-dungeon-tileset/")
+	var no_slash := feed.duplicate()
+	no_slash["siteUrl"] = "https://tmhsdigital.github.io/Free-Game-Dev-Assets"
+	eq("catalog page: siteUrl without a trailing slash", Details.catalog_page_url(no_slash, tileset),
+		"https://tmhsdigital.github.io/Free-Game-Dev-Assets/entry/ox72-dungeon-tileset/")
+	for bad in ["https://evil.example/", "//evil.example/x", "../../x", "entry/a b/", "javascript:alert(1)", ""]:
+		var e := tileset.duplicate()
+		e["page"] = bad
+		eq("catalog page: refuses %s" % bad, Details.catalog_page_url(feed, e), "")
+
+	eq("commercial: true", Details.commercial_text(true), "Yes")
+	eq("commercial: false", Details.commercial_text(false), "No")
+	eq("commercial: varies", Details.commercial_text("varies"), "Varies by file")
+	eq("commercial: unknown", Details.commercial_text("unknown").begins_with("Unknown"), true)
+	eq("commercial: missing", Details.commercial_text(null).begins_with("Unknown"), true)
+
+	var c := Details.credit(tileset)
+	eq("credit, none needed: can't copy", c["can_copy"], false)
+	eq("credit, none needed: says so", c["text"], "Not required")
+	eq("credit, none needed: button note", c["note"], "No credit is required for this entry.")
+
+	c = Details.credit(mocap)
+	eq("credit, required: can copy", c["can_copy"], true)
+	eq("credit, required: line is the feed's, unchanged", c["line"], mocap["credit_line"])
+	eq("credit, required: says so", c["text"], "Required")
+
+	var notice := mocap.duplicate()
+	notice["attributionClass"] = "notice"
+	eq("credit, notice: keep the licence text", Details.credit(notice)["text"].contains("licence text"), true)
+
+	var unknown := tileset.duplicate()
+	unknown["attribution_required"] = "unknown"
+	c = Details.credit(unknown)
+	eq("credit, unknown: can't copy", c["can_copy"], false)
+	eq("credit, unknown: says unknown", c["text"].begins_with("Unknown"), true)
+
+	var missing_line := mocap.duplicate()
+	missing_line["credit_line"] = null
+	c = Details.credit(missing_line)
+	eq("credit, required but no line: can't copy", c["can_copy"], false)
+	eq("credit, required but no line: points to the catalog page", c["note"].contains("catalog page"), true)
+
+	var blanks := mocap.duplicate()
+	blanks["credit_line"] = "\"{title}\" by Someone (CC BY 4.0)"
+	eq("credit, {…} fields: fill-in note", Details.credit(blanks)["fill_in"], true)
+	eq("credit, plain line: no fill-in note", Details.credit(mocap)["fill_in"], false)
+
+	eq("licence text: with SPDX id", Details.licence_text({"license": "CC-BY-3.0", "license_spdx": "CC-BY-3.0"}), "CC-BY-3.0")
+	eq("licence text: SPDX differs", Details.licence_text({"license": "SIL OFL", "license_spdx": "OFL-1.1"}), "SIL OFL (OFL-1.1)")
+	eq("licence text: no SPDX", Details.licence_text({"license": "custom", "license_spdx": null}), "custom")
+
+	eq("verified note: dated", Details.verified_note(tileset),
+		"Licence as recorded on %s. Check the source before you ship." % tileset["verified"])
+	eq("verified note: no date", Details.verified_note({"verified": null}),
+		"Licence as recorded by the catalog. Check the source before you ship.")
 
 
 func _clear_scratch() -> void:

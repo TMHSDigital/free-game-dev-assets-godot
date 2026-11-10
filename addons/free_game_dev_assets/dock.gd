@@ -10,6 +10,7 @@ signal entry_selected(id: String)
 
 const FeedClient := preload("feed_client.gd")
 const Browse := preload("browse.gd")
+const Details := preload("entry_details.gd")
 
 ## Typing waits this long after the last key before the list updates.
 const SEARCH_DELAY_SEC := 0.2
@@ -45,6 +46,20 @@ var _godot: CheckBox
 var _count: Label
 var _tree: Tree
 var _settings_path := ""
+
+# Details panel.
+var _selected: Dictionary = {}
+var _shown_by_id: Dictionary = {}
+var _details_hint: Label
+var _details: VBoxContainer
+var _d_name: Label
+var _d_facts: GridContainer
+var _d_summary: Label
+var _d_open_source: Button
+var _d_open_page: Button
+var _d_copy: Button
+var _d_action_note: Label
+var _d_verified: Label
 
 
 func _ready() -> void:
@@ -88,13 +103,154 @@ func _ready() -> void:
 	_tree.set_column_expand(Col.CATEGORY, false)
 	_tree.set_column_expand(Col.LICENSE, false)
 	_tree.item_selected.connect(_on_item_selected)
-	add_child(_tree)
+
+	# The list above, the selected entry's details below; drag to resize.
+	var split := VSplitContainer.new()
+	split.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(split)
+	split.add_child(_tree)
+	split.add_child(_build_details())
 
 	_client = FeedClient.new()
 	_client.cache_dir = EditorInterface.get_editor_paths().get_cache_dir()
 	add_child(_client)
 	_client.loaded.connect(_on_loaded)
 	_client.refresh()
+
+
+func _build_details() -> Control:
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.custom_minimum_size.y = 160 * EditorInterface.get_editor_scale()
+	# Share the height with the list: list 55%, details 45%, until dragged.
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_stretch_ratio = 0.8
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(box)
+
+	_details_hint = Label.new()
+	_details_hint.text = "Select an entry to see its licence and links."
+	_details_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	box.add_child(_details_hint)
+
+	_details = VBoxContainer.new()
+	_details.visible = false
+	box.add_child(_details)
+
+	_d_name = Label.new()
+	_d_name.add_theme_font_size_override("font_size", 15)
+	_d_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_details.add_child(_d_name)
+
+	_d_facts = GridContainer.new()
+	_d_facts.columns = 2
+	_details.add_child(_d_facts)
+
+	var actions := HFlowContainer.new()
+	_details.add_child(actions)
+	_d_open_source = _action(actions, "Open source", "Open the source's own page in your browser", _on_open_source)
+	_d_open_page = _action(actions, "Catalog page", "Open the catalog's page for this entry, where the licence is quoted", _on_open_page)
+	_d_copy = _action(actions, "Copy credit line", "Copy the recorded credit line to the clipboard", _on_copy_credit)
+
+	_d_action_note = Label.new()
+	_d_action_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_details.add_child(_d_action_note)
+
+	_d_verified = Label.new()
+	_d_verified.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_d_verified.modulate = Color(1, 1, 1, 0.7)
+	_details.add_child(_d_verified)
+
+	# Last, so a long summary never pushes the actions out of view.
+	_d_summary = Label.new()
+	_d_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_details.add_child(_d_summary)
+	return scroll
+
+
+func _action(parent: Control, text: String, tip: String, handler: Callable) -> Button:
+	var b := Button.new()
+	b.text = text
+	b.tooltip_text = tip
+	b.pressed.connect(handler)
+	parent.add_child(b)
+	return b
+
+
+func _show_details(e: Dictionary) -> void:
+	_selected = e
+	_details_hint.visible = e.is_empty()
+	_details.visible = not e.is_empty()
+	if e.is_empty():
+		return
+	_d_name.text = String(e["name"])
+	for child in _d_facts.get_children():
+		_d_facts.remove_child(child)
+		child.queue_free()
+	var credit := Details.credit(e)
+	var formats: Array = e.get("formats", [])
+	var facts := []
+	if typeof(e.get("publisher")) == TYPE_STRING and e["publisher"] != "":
+		facts.append(["Publisher", e["publisher"]])
+	facts.append_array([
+		["Licence", Details.licence_text(e)],
+		["Commercial use", Details.commercial_text(e.get("commercial"))],
+		["Credit", credit["text"]],
+		["Formats", ", ".join(PackedStringArray(formats)) if not formats.is_empty() else "Not recorded"],
+		["Verified", e["verified"] if typeof(e.get("verified")) == TYPE_STRING else "Not recorded"],
+	])
+	if e.get("status") == "needs-review":
+		facts.append(["Status", "Needs review: the catalog page says what is still open"])
+	for fact in facts:
+		var k := Label.new()
+		k.text = fact[0]
+		k.modulate = Color(1, 1, 1, 0.7)
+		k.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+		_d_facts.add_child(k)
+		var v := Label.new()
+		v.text = String(fact[1])
+		v.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_d_facts.add_child(v)
+	_d_summary.text = String(e["summary"]) if typeof(e.get("summary")) == TYPE_STRING else ""
+	_d_summary.visible = _d_summary.text != ""
+
+	var notes := PackedStringArray()
+	_d_open_source.disabled = Details.source_url(e) == ""
+	if _d_open_source.disabled:
+		notes.append("The source link isn't https, so the plugin won't open it. The catalog page links to it.")
+	_d_open_page.disabled = Details.catalog_page_url(feed, e) == ""
+	_d_copy.disabled = not credit["can_copy"]
+	if credit["note"] != "":
+		notes.append(credit["note"])
+	_d_action_note.text = "\n".join(notes)
+	_d_action_note.visible = not notes.is_empty()
+	_d_verified.text = Details.verified_note(e)
+
+
+func _on_open_source() -> void:
+	var url := Details.source_url(_selected)
+	if url != "":
+		OS.shell_open(url)
+
+
+func _on_open_page() -> void:
+	var url := Details.catalog_page_url(feed, _selected)
+	if url != "":
+		OS.shell_open(url)
+
+
+func _on_copy_credit() -> void:
+	var credit := Details.credit(_selected)
+	if not credit["can_copy"]:
+		return
+	DisplayServer.clipboard_set(credit["line"])
+	var note := "Copied the credit line."
+	if credit["fill_in"]:
+		note += " Fill in the {…} parts after pasting."
+	_d_action_note.text = note
+	_d_action_note.visible = true
 
 
 func _build_filters() -> void:
@@ -178,17 +334,24 @@ func _set_filter(key: String, value) -> void:
 
 func _rebuild() -> void:
 	_tree.clear()
+	_shown_by_id.clear()
 	var entries: Array = feed.get("entries", [])
 	if entries.is_empty():
 		_count.text = ""
+		_show_details({})
 		return
 	var shown := Browse.apply(entries, filters)
 	_count.text = "Showing %d of %d" % [shown.size(), entries.size()]
 	var categories: Dictionary = feed.get("categories", {})
 	var families: Dictionary = feed.get("licenseFamilies", {})
+	var keep_id: String = _selected.get("id", "")
+	var keep: TreeItem = null
 	var root := _tree.create_item()
 	for e in shown:
 		var item := _tree.create_item(root)
+		_shown_by_id[e["id"]] = e
+		if e["id"] == keep_id:
+			keep = item
 		var name := String(e["name"])
 		if e.get("status") == "needs-review":
 			name += "  (needs review)"
@@ -204,6 +367,14 @@ func _rebuild() -> void:
 		item.set_tooltip_text(Col.LICENSE, licence_tip)
 		if FAMILY_COLORS.has(family):
 			item.set_custom_bg_color(Col.LICENSE, FAMILY_COLORS[family])
+	# Keep the selected entry selected while it is still in the list; the
+	# details then show its data from this feed.
+	if keep:
+		keep.select(Col.NAME)
+		_tree.scroll_to_item(keep)
+		_show_details(_shown_by_id[keep_id])
+	else:
+		_show_details({})
 
 
 func _tooltip(e: Dictionary) -> String:
@@ -220,7 +391,9 @@ func _tooltip(e: Dictionary) -> String:
 func _on_item_selected() -> void:
 	var item := _tree.get_selected()
 	if item:
-		entry_selected.emit(String(item.get_metadata(Col.NAME)))
+		var id := String(item.get_metadata(Col.NAME))
+		_show_details(_shown_by_id.get(id, {}))
+		entry_selected.emit(id)
 
 
 func _on_refresh_pressed() -> void:
