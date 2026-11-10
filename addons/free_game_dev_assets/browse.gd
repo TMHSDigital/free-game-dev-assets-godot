@@ -6,6 +6,9 @@ extends RefCounted
 ## Where the filter state is saved, inside the editor's config folder.
 const SETTINGS_FILE := "free_game_dev_assets.cfg"
 const _SECTION := "filters"
+## Filters that describe one project, so they are never saved: the settings
+## file is shared by every project the editor opens.
+const _PER_PROJECT := ["project_only"]
 
 
 ## The filters a fresh install starts with.
@@ -73,6 +76,8 @@ static func load_filters(path: String) -> Dictionary:
 	if cfg.load(path) != OK:
 		return out
 	for key in out:
+		if key in _PER_PROJECT:
+			continue
 		var v = cfg.get_value(_SECTION, key, out[key])
 		if typeof(v) == typeof(out[key]):
 			out[key] = v
@@ -84,7 +89,11 @@ static func save_filters(path: String, filters: Dictionary) -> bool:
 	var cfg := ConfigFile.new()
 	cfg.load(path)  # keep any other sections
 	for key in default_filters():
-		if filters.has(key):
+		if key in _PER_PROJECT:
+			# Also drops a value saved by 0.1.0.
+			if cfg.has_section_key(_SECTION, key):
+				cfg.erase_section_key(_SECTION, key)
+		elif filters.has(key):
 			cfg.set_value(_SECTION, key, filters[key])
 	return cfg.save(path) == OK
 

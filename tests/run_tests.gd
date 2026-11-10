@@ -288,6 +288,20 @@ func _test_browse() -> bool:
 		"commercial": true, "no_credit": true, "godot": false}, true)
 	eq("filters: save", Browse.save_filters(path, saved), true)
 	eq("filters: round trip", Browse.load_filters(path), saved)
+	# "Only this project's" belongs to one project; the file is editor-wide.
+	var project_only := saved.duplicate()
+	project_only["project_only"] = true
+	Browse.save_filters(path, project_only)
+	eq("filters: project_only is not saved", Browse.load_filters(path)["project_only"], false)
+	var old := ConfigFile.new()
+	old.load(path)
+	old.set_value("filters", "project_only", true)  # as 0.1.0 saved it
+	old.save(path)
+	eq("filters: a project_only saved by 0.1.0 is ignored", Browse.load_filters(path)["project_only"], false)
+	Browse.save_filters(path, saved)
+	var resaved := ConfigFile.new()
+	resaved.load(path)
+	eq("filters: saving drops an old project_only", resaved.has_section_key("filters", "project_only"), false)
 	var cfg := ConfigFile.new()
 	cfg.load(path)
 	cfg.set_value("filters", "commercial", "yes")

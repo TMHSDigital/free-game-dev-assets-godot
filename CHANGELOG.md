@@ -11,6 +11,8 @@ and the changelog will say so.
 
 - **Export credits** now says when it could not save `free_game_dev_assets.json`, instead of
   showing only the export result.
+- **Only this project's** is no longer saved with the other filters. The filter settings are
+  shared by every project, so it carried over and showed an empty list in other projects.
 
 ## 0.1.0 (2026-11-09)
 
