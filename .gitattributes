@@ -16,3 +16,4 @@
 # The addon carries its own copy; a root LICENSE would land in the user's project root.
 /LICENSE export-ignore
 /CHANGELOG.md export-ignore
+/CONTRIBUTING.md export-ignore
