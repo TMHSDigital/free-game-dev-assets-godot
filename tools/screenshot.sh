@@ -2,9 +2,10 @@
 # Takes a screenshot of the Free Assets dock in a real Godot editor and saves
 # it as a PNG (by default the README image, docs/images/dock.png).
 #
-#   tools/screenshot.sh [--query TEXT] [--height PX] [--out PATH]
+#   tools/screenshot.sh [--query TEXT] [--select ID] [--height PX] [--out PATH]
 #
 #   --query   search to show in the dock (default: pixel; "" for none)
+#   --select  id of an entry to select, to show its details (default: none)
 #   --height  pixels of the dock to keep from the top (default: 600; 0 for all)
 #   --out     where to write the PNG (default: docs/images/dock.png)
 #
@@ -23,15 +24,17 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 query="pixel"
+select=""
 height=600
 out="$root/docs/images/dock.png"
 
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--query) query="$2"; shift 2 ;;
+		--select) select="$2"; shift 2 ;;
 		--height) height="$2"; shift 2 ;;
 		--out) out="$2"; shift 2 ;;
-		-h|--help) sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		-h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
 		*) echo "unknown option: $1 (try --help)" >&2; exit 1 ;;
 	esac
 done
@@ -70,7 +73,7 @@ grep -q '_screenshot/plugin.cfg' "$work/project.godot" || { echo "could not enab
 
 echo "Opening the editor on a temporary copy of the project..."
 status=0
-FGDA_SHOT_OUT="$(native "$out")" FGDA_SHOT_QUERY="$query" FGDA_SHOT_HEIGHT="$height" \
+FGDA_SHOT_OUT="$(native "$out")" FGDA_SHOT_QUERY="$query" FGDA_SHOT_SELECT="$select" FGDA_SHOT_HEIGHT="$height" \
 	"$godot" --editor --path "$(native "$work")" > "$work/editor.log" 2>&1 || status=$?
 
 grep -E "^screenshot:" "$work/editor.log" || true

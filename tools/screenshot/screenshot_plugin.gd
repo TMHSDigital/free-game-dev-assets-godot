@@ -10,6 +10,7 @@ extends EditorPlugin
 ## Settings come from environment variables set by the script:
 ##   FGDA_SHOT_OUT     absolute path of the PNG to write (required)
 ##   FGDA_SHOT_QUERY   search text, "" for none
+##   FGDA_SHOT_SELECT  id of the entry to select, "" for none
 ##   FGDA_SHOT_HEIGHT  pixels of the dock to keep from the top, 0 for all
 ##
 ## Exit codes: 0 saved, 1 failed, 2 saved but some licence text is cut short.
@@ -61,6 +62,20 @@ func _capture(dock) -> void:  # untyped: reaches into dock.gd's members
 	dock._search.text = query
 	dock.filters["query"] = query
 	dock._rebuild()
+
+	var select := OS.get_environment("FGDA_SHOT_SELECT")
+	if select != "":
+		var found := false
+		for item in dock._tree.get_root().get_children():
+			if item.get_metadata(0) == select:
+				item.select(0)
+				dock._tree.scroll_to_item(item)
+				found = true
+				break
+		if not found:
+			printerr("screenshot: no row with id %s in the list (is it filtered out?)" % select)
+			get_tree().quit(1)
+			return
 	for i in 15:
 		await get_tree().process_frame
 

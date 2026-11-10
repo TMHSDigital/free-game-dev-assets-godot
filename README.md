@@ -34,7 +34,8 @@ to the source.
 
 > [!IMPORTANT]
 > Early development, not yet released. The dock already browses, searches and filters the
-> catalog; entry details, credit lines and `CREDITS.md` export are still to come. See [Status](#status).
+> catalog, shows each entry's details and copies credit lines; `CREDITS.md` export is still to
+> come. See [Status](#status).
 
 ## Contents
 
@@ -49,9 +50,14 @@ to the source.
 | ✅ | **Filter** by category, licence family, commercial use, "no credit needed" and "works in Godot" (on by default); the filters are kept between editor sessions | Works now |
 | ✅ | **See the licence on every row** as text, on a background coloured by licence family, with entries still under review marked | Works now |
 | ✅ | **Work offline** from a cached copy of the catalog | Works now |
-| ⏳ | **Open an entry**: its source, and its catalog page where the licence is quoted | [#281](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/281) |
-| ⏳ | **Copy the recorded credit line** | [#281](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/281) |
+| ✅ | **See an entry's details**: licence and SPDX id, commercial use, credit, formats and the date the licence was read | Works now |
+| ✅ | **Open an entry**: its source, and its catalog page where the licence is quoted. Only `https://` links are opened | Works now |
+| ✅ | **Copy the recorded credit line**, the same text the catalog page shows | Works now |
 | ⏳ | **Track the assets your project uses** and export a `CREDITS.md` | [#282](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/282) |
+
+<p align="center"><img src="docs/images/details.png" alt="The details panel for the ACCAD Open Motion Project: licence CC-BY-3.0, commercial use yes, credit required, formats BVH, C3D, FBX and AMC, verified 2026-08-24, with Open source, Catalog page and Copy credit line buttons" width="360" /></p>
+
+<p align="center"><sub>Select a row to see its details. Copy credit line is turned off, with the reason shown, when there is no line to copy.</sub></p>
 
 ## Status
 
@@ -62,7 +68,7 @@ Planned work is tracked in the catalog repository under
 - [x] Skeleton addon with an empty dock ([#278](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/278))
 - [x] Fetch and cache the feed, offline fallback ([#279](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/279))
 - [x] Browse list with search and filters ([#280](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/280))
-- [ ] Entry details and actions ([#281](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/281))
+- [x] Entry details and actions ([#281](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/281))
 - [ ] Project asset list and `CREDITS.md` export ([#282](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/282))
 - [ ] Tests in CI ([#283](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/283)): running on every push; stays open for the credits-export tests
 - [ ] Release and Asset Library listing ([#284](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/284))
@@ -110,6 +116,7 @@ addons/free_game_dev_assets/
   plugin.gd         adds and removes the dock
   dock.gd           the dock UI
   browse.gd         search, filters, sort and saved filter state (no editor APIs)
+  entry_details.gd  what the details panel says, and which links are safe to open (no editor APIs)
   feed.gd           parses and checks plugin-feed.json (no editor APIs)
   feed_cache.gd     the saved copy and its download metadata
   feed_client.gd    the request, and falling back to the saved copy
@@ -142,6 +149,7 @@ Retake the README screenshot after changing how the dock looks:
 ```
 tools/screenshot.sh                      # writes docs/images/dock.png
 tools/screenshot.sh --query "font" --height 0 --out shot.png
+tools/screenshot.sh --query "accad" --select accad-mocap --height 0 --out docs/images/details.png
 ```
 
 It opens a real editor window for about ten seconds, on a temporary copy of the project, so
