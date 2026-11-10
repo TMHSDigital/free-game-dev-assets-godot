@@ -356,10 +356,11 @@ func _rebuild() -> void:
 		_count.text = ""
 		_show_details({})
 		return
+	var total := entries.size()
 	if filters.get("project_only", false):
 		entries = entries.filter(func(e): return _project_ids.has(e["id"]))
 	var shown := Browse.apply(entries, filters)
-	_count.text = "Showing %d of %d" % [shown.size(), entries.size()]
+	_count.text = "Showing %d of %d" % [shown.size(), total]
 	var categories: Dictionary = feed.get("categories", {})
 	var families: Dictionary = feed.get("licenseFamilies", {})
 	var keep_id: String = _selected.get("id", "")

@@ -59,6 +59,8 @@ to the source.
 
 <p align="center"><sub>Select a row to see its details. Copy credit line is turned off, with the reason shown, when there is no line to copy.</sub></p>
 
+<p align="center"><img src="docs/images/credits.png" alt="The dock showing only this project's five assets, each marked with a check, after Export credits: the note reads Wrote CREDITS.md for 5 assets" width="360" /></p>
+
 ## Credits for your project
 
 Select an entry and press **Add to project**; rows your project uses get a ✓, and **Only this
@@ -91,7 +93,9 @@ Planned work is tracked in the catalog repository under
 - [x] Entry details and actions ([#281](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/281))
 - [x] Project asset list and `CREDITS.md` export ([#282](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/282))
 - [x] Tests in CI ([#283](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/283))
-- [ ] Release and Asset Library listing ([#284](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/284))
+- [ ] Release 0.1.0 and Asset Library listing ([#284](https://github.com/TMHSDigital/Free-Game-Dev-Assets/issues/284))
+
+Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## Requirements
 
@@ -102,8 +106,11 @@ push on Godot 4.3 (the oldest supported) and the latest stable release.
 
 Not released yet. Once it is:
 
-1. Install **Free Game Dev Assets** from the Godot Asset Library, or copy
-   `addons/free_game_dev_assets/` into your project's `addons/` folder.
+1. Install **Free Game Dev Assets** from the Godot Asset Library (the **AssetLib** tab in the
+   editor), or download the release from
+   [Releases](https://github.com/TMHSDigital/free-game-dev-assets-godot/releases) and copy
+   `addons/free_game_dev_assets/` into your project's `addons/` folder. The download holds only
+   that folder.
 2. Turn it on under **Project → Project Settings → Plugins**.
 3. The **Free Assets** dock appears on the right.
 

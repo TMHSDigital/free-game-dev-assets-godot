@@ -13,3 +13,6 @@
 /project export-ignore
 /docs export-ignore
 /tools export-ignore
+# The addon carries its own copy; a root LICENSE would land in the user's project root.
+/LICENSE export-ignore
+/CHANGELOG.md export-ignore

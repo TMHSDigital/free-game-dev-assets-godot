@@ -65,6 +65,10 @@ jobs:
           grep -q "free_game_dev_assets: dock added" "$RUNNER_TEMP/editor.log" || { echo "::error::dock was not added"; exit 1; }
           grep -q "free_game_dev_assets: dock removed" "$RUNNER_TEMP/editor.log" || { echo "::error::dock was not removed on exit"; exit 1; }
 
+      # What the Godot Asset Library would download, installed into a fresh project.
+      - name: Install from the download into a fresh project
+        run: tests/install_from_archive.sh
+
       - name: Editor end-to-end (asset list and CREDITS.md export)
         run: tests/editor_e2e.sh
 

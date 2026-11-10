@@ -12,6 +12,9 @@ extends EditorPlugin
 ##   FGDA_SHOT_QUERY   search text, "" for none
 ##   FGDA_SHOT_SELECT  id of the entry to select, "" for none
 ##   FGDA_SHOT_HEIGHT  pixels of the dock to keep from the top, 0 for all
+##   FGDA_SHOT_PROJECT comma-separated ids to put on the project's asset list
+##                     and show with "Only this project's", "" for none
+##   FGDA_SHOT_EXPORT  "1" to press Export credits before the shot
 ##
 ## Exit codes: 0 saved, 1 failed, 2 saved but some licence text is cut short.
 
@@ -61,7 +64,29 @@ func _capture(dock) -> void:  # untyped: reaches into dock.gd's members
 	var query := OS.get_environment("FGDA_SHOT_QUERY")
 	dock._search.text = query
 	dock.filters["query"] = query
+
+	# The asset list lives in the throwaway project, so writing it is safe.
+	var project := OS.get_environment("FGDA_SHOT_PROJECT")
+	if project != "":
+		var by_id := {}
+		for e in dock.feed["entries"]:
+			by_id[e["id"]] = e
+		var ids: Array = []
+		var known := {}
+		for id in project.split(",", false):
+			ids.append(id)
+			if by_id.has(id):
+				known[id] = dock.Credits.snapshot(by_id[id])
+		var f := FileAccess.open(dock.Credits.LIST_FILE, FileAccess.WRITE)
+		f.store_string(dock.Credits.list_text(ids, known))
+		f.close()
+		dock._load_list()
+		dock.filters["project_only"] = true
+		dock._project_only.set_pressed_no_signal(true)
 	dock._rebuild()
+	dock._update_project_row()
+	if OS.get_environment("FGDA_SHOT_EXPORT") == "1":
+		dock._export.pressed.emit()
 
 	var select := OS.get_environment("FGDA_SHOT_SELECT")
 	if select != "":
