@@ -177,6 +177,43 @@ static func snapshot(e: Dictionary) -> Dictionary:
 
 # --- CREDITS.md ----------------------------------------------------------------
 
+## The project's entries whose licence or credit line in the feed differs from
+## the snapshot taken when they were added (or last exported). Ids without a
+## snapshot, or no longer in the feed, are left out. Returns an Array of
+## {id, name, license: [was, now] or [], credit_line: [was, now] or []}.
+static func changes(ids: Array, known: Dictionary, feed: Dictionary) -> Array:
+	var by_id := {}
+	for e in feed.get("entries", []):
+		by_id[e["id"]] = e
+	var out: Array = []
+	for id in ids:
+		if not by_id.has(id) or typeof(known.get(id)) != TYPE_DICTIONARY:
+			continue
+		var was: Dictionary = known[id]
+		var now: Dictionary = by_id[id]
+		var c := {"id": id, "name": String(now["name"]), "license": [], "credit_line": []}
+		for key in ["license", "credit_line"]:
+			if was.get(key) != now.get(key):
+				c[key] = [was.get(key), now.get(key)]
+		if not c["license"].is_empty() or not c["credit_line"].is_empty():
+			out.append(c)
+	return out
+
+
+## One change as a short phrase: "Name (licence CC-BY-3.0 → CC-BY-4.0, new credit line)".
+static func change_text(c: Dictionary) -> String:
+	var what := PackedStringArray()
+	if not c["license"].is_empty():
+		what.append("licence %s → %s" % [or_none(c["license"][0]), or_none(c["license"][1])])
+	if not c["credit_line"].is_empty():
+		what.append("new credit line" if c["credit_line"][1] != null else "credit line removed")
+	return "%s (%s)" % [c["name"], ", ".join(what)]
+
+
+static func or_none(v) -> String:
+	return String(v) if typeof(v) == TYPE_STRING and v != "" else "none"
+
+
 ## Links each entry to its catalog page, by the same rule as the dock's
 ## Catalog page button: the feed's `page`, or no link when it looks unsafe.
 static func page_url(feed: Dictionary) -> Callable:
@@ -184,10 +221,13 @@ static func page_url(feed: Dictionary) -> Callable:
 		return Details.catalog_page_url(feed, e)
 
 
-## The marked block for the project's list. Returns {text, known, missing}:
-## `known` is the refreshed snapshot to save back to the list file, and
-## `missing` counts ids the feed no longer lists.
+## The marked block for the project's list. Returns {text, known, missing, changed}:
+## `known` is the refreshed snapshot to save back to the list file,
+## `missing` counts ids the feed no longer lists, and `changed` is what
+## changes() found against the old snapshot (the block itself matches the
+## website export, so the dock reports these).
 static func export_block(ids: Array, known: Dictionary, feed: Dictionary) -> Dictionary:
+	var changed := changes(ids, known, feed)
 	var by_id := {}
 	for e in feed.get("entries", []):
 		by_id[e["id"]] = e
@@ -221,7 +261,7 @@ static func export_block(ids: Array, known: Dictionary, feed: Dictionary) -> Dic
 			else:
 				out.append("- `%s`: no details were saved; check the licence." % id)
 	out.append_array(["", "<sub>Written by the Free Game Dev Assets Godot plugin from catalog %s. The plugin replaces everything between these markers when you export again; write your own text outside them.</sub>" % feed.get("version", "?"), END])
-	return {"text": "\n".join(out) + "\n", "known": new_known, "missing": gone.size()}
+	return {"text": "\n".join(out) + "\n", "known": new_known, "missing": gone.size(), "changed": changed}
 
 
 ## Puts `block` into an existing CREDITS file in place of the old block, or

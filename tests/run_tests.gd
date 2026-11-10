@@ -580,6 +580,29 @@ func _test_credits() -> bool:
 	eq("export: snapshot kept for removed ids", out["known"]["gone-z"]["name"], "Gone Z")
 	eq("export: feed version named", out["text"].contains("v2026.11.10"), true)
 	eq("export: same input, same output", Credits.export_block(["credit-a", "no-line-c", "gone-z", "never-known"], known, feed)["text"], out["text"])
+
+	# Licence and credit line changes since an entry was added.
+	var by_id := {}
+	for e in entries:
+		by_id[e["id"]] = e
+	var snaps := {}
+	for id in ["credit-a", "mit-d", "cc0-e"]:
+		snaps[id] = Credits.snapshot(by_id[id])
+	var ids := ["credit-a", "mit-d", "cc0-e", "gone-z", "no-snapshot"]
+	eq("changes: none when the snapshot matches", Credits.changes(ids, snaps, feed), [])
+	snaps["credit-a"]["license"] = "CC-BY-2.0"
+	snaps["mit-d"]["credit_line"] = "Old line by D"
+	var found := Credits.changes(ids, snaps, feed)
+	eq("changes: both found, in list order", found.map(func(c): return c["id"]), ["credit-a", "mit-d"])
+	eq("changes: licence was and now", found[0]["license"], ["CC-BY-2.0", by_id["credit-a"]["license"]])
+	eq("changes: credit line untouched", found[0]["credit_line"], [])
+	eq("changes: credit line removed", found[1]["credit_line"], ["Old line by D", null])
+	eq("change text: licence", Credits.change_text(found[0]), "Credit A (licence CC-BY-2.0 → %s)" % by_id["credit-a"]["license"])
+	eq("change text: credit line removed", Credits.change_text(found[1]), "Mit D (credit line removed)")
+	var refreshed := Credits.export_block(ids, snaps, feed)
+	eq("export: reports the changes", refreshed["changed"].size(), 2)
+	eq("export: CREDITS block unchanged by them", refreshed["text"], Credits.export_block(ids, Credits.export_block(ids, snaps, feed)["known"], feed)["text"])
+	eq("export: refreshed snapshot clears them", Credits.changes(ids, refreshed["known"], feed), [])
 	return true
 
 

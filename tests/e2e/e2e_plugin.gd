@@ -152,6 +152,24 @@ func _run(dock) -> void:
 	eq("second export changes nothing", _read(Credits.CREDITS_FILE), first)
 	eq("second export says up to date", dock._project_note.text.begins_with("CREDITS.md is already up to date"), true)
 
+	# The catalog changed a licence since the entry was added: the dock says so
+	# until the next export takes the new terms.
+	var aged := Credits.parse_list(_read(Credits.LIST_FILE))
+	aged["known"][credited]["license"] = "Old-Licence-1.0"
+	f = FileAccess.open(Credits.LIST_FILE, FileAccess.WRITE)
+	f.store_string(Credits.list_text(aged["ids"], aged["known"]))
+	f.close()
+	dock._load_list()
+	dock._update_project_row()
+	_select(dock, credited)
+	eq("changed: project row counts it", dock._project_label.text, "This project uses 3 (1 changed since added)")
+	eq("changed: row marked", dock._tree.get_selected().get_text(0).contains("(changed since added)"), true)
+	eq("changed: details say what it was", dock._d_action_note.text.contains("the licence was Old-Licence-1.0"), true)
+	dock._export.pressed.emit()
+	eq("changed: export names it", dock._project_note.text.contains("Changed since added: %s (licence Old-Licence-1.0 → " % _entry(dock, credited)["name"]), true)
+	eq("changed: CREDITS.md as before", _read(Credits.CREDITS_FILE), first)
+	eq("changed: cleared after export", dock._project_label.text, "This project uses 3")
+
 	# Text the user adds outside the markers survives an export.
 	f = FileAccess.open(Credits.CREDITS_FILE, FileAccess.WRITE)
 	f.store_string(first + "\nOne more thank-you.\n")

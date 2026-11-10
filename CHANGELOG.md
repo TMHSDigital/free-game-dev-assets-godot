@@ -7,6 +7,12 @@ and the changelog will say so.
 
 ## Unreleased
 
+### Added
+
+- Entries in your asset list whose licence or credit line changed in the catalog since you
+  added them are marked "changed since added": the project row counts them, the details say
+  what the old terms were, and **Export credits** names them when it writes the new terms.
+
 ### Fixed
 
 - **Export credits** now says when it could not save `free_game_dev_assets.json`, instead of

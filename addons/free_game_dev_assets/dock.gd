@@ -239,6 +239,15 @@ func _show_details(e: Dictionary) -> void:
 	_d_copy.disabled = not credit["can_copy"]
 	if credit["note"] != "":
 		notes.append(credit["note"])
+	var changed := Credits.changes([e["id"]], _known, feed) if _project_ids.has(e["id"]) else []
+	if not changed.is_empty():
+		var c: Dictionary = changed[0]
+		var what := PackedStringArray()
+		if not c["license"].is_empty():
+			what.append("the licence was %s" % Credits.or_none(c["license"][0]))
+		if not c["credit_line"].is_empty():
+			what.append("the credit line was \"%s\"" % Credits.or_none(c["credit_line"][0]))
+		notes.append("Changed since you added it: %s. Export credits writes the new terms." % " and ".join(what))
 	_d_action_note.text = "\n".join(notes)
 	_d_action_note.visible = not notes.is_empty()
 	_d_verified.text = Details.verified_note(e)
@@ -365,6 +374,9 @@ func _rebuild() -> void:
 	var families: Dictionary = feed.get("licenseFamilies", {})
 	var keep_id: String = _selected.get("id", "")
 	var keep: TreeItem = null
+	var changed := {}
+	for c in Credits.changes(_project_ids, _known, feed):
+		changed[c["id"]] = true
 	var root := _tree.create_item()
 	for e in shown:
 		var item := _tree.create_item(root)
@@ -374,6 +386,8 @@ func _rebuild() -> void:
 		var name := String(e["name"])
 		if _project_ids.has(e["id"]):
 			name = "✓ " + name
+		if changed.has(e["id"]):
+			name += "  (changed since added)"
 		if e.get("status") == "needs-review":
 			name += "  (needs review)"
 		item.set_text(Col.NAME, name)
@@ -519,9 +533,16 @@ func _update_project_row() -> void:
 	else:
 		var missing := _project_ids.filter(func(id): return not feed.is_empty() and not _has_entry(id)).size()
 		var text := "This project uses %d" % _project_ids.size()
+		var flags := PackedStringArray()
 		if missing > 0:
-			text += " (%d no longer listed)" % missing
+			flags.append("%d no longer listed" % missing)
+		var changed := Credits.changes(_project_ids, _known, feed).size()
+		if changed > 0:
+			flags.append("%d changed since added" % changed)
+		if not flags.is_empty():
+			text += " (%s)" % ", ".join(flags)
 		_project_label.text = text
+		_project_label.tooltip_text = "Rows marked \"changed since added\" show what changed when selected. Export credits writes the new terms." if changed > 0 else ""
 	_export.disabled = feed.is_empty() or _list_error != "" or _project_ids.is_empty()
 	_update_project_button()
 
@@ -584,6 +605,8 @@ func _on_export() -> void:
 	var gone := ""
 	if block["missing"] > 0:
 		gone = " %d no longer listed: see that section." % block["missing"]
+	if not block["changed"].is_empty():
+		gone += " Changed since added: %s." % "; ".join(PackedStringArray(block["changed"].map(func(c): return Credits.change_text(c))))
 	var note := ""
 	if merged["text"] == existing:
 		note = "%s is already up to date.%s" % [Credits.CREDITS_FILE.get_file(), gone]
@@ -595,4 +618,5 @@ func _on_export() -> void:
 	if not list_saved:
 		note += " Could not save %s." % Credits.LIST_FILE.get_file()
 	_note(note)
+	_rebuild()  # the refreshed snapshots clear "changed since added"
 	_update_project_row()

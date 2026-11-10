@@ -81,7 +81,9 @@ to check file by file, open questions, and the ones that need nothing.
   credits above or below. Exporting again with nothing changed leaves the file as it is.
 - **Nothing is dropped silently.** If the catalog stops listing an entry you use, the export
   keeps it under **No longer listed**, with the name, licence and credit line from when the
-  plugin last saw it, and asks you to check the licence.
+  plugin last saw it, and asks you to check the licence. If the catalog changes the licence or
+  credit line of an entry you use, the dock marks it "changed since added" and says what it was,
+  until your next export writes the new terms.
 - **The list is a file in your project**, `free_game_dev_assets.json`. Commit it with
   `CREDITS.md` so your team works from the same list. If either file is damaged (broken JSON, a
   missing marker), the plugin says what's wrong and doesn't overwrite it.
