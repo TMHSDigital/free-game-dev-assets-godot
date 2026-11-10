@@ -87,8 +87,6 @@ func _ready() -> void:
 	_tree.set_column_expand(Col.NAME, true)
 	_tree.set_column_expand(Col.CATEGORY, false)
 	_tree.set_column_expand(Col.LICENSE, false)
-	_tree.set_column_custom_minimum_width(Col.CATEGORY, 90)
-	_tree.set_column_custom_minimum_width(Col.LICENSE, 110)
 	_tree.item_selected.connect(_on_item_selected)
 	add_child(_tree)
 
@@ -200,7 +198,10 @@ func _rebuild() -> void:
 		item.set_text(Col.CATEGORY, String(categories.get(e["category"], e["category"])))
 		item.set_text(Col.LICENSE, String(e["license"]))
 		var family = e.get("licenseFamily", "")
-		item.set_tooltip_text(Col.LICENSE, String(families.get(family, e["license"])))
+		var licence_tip := String(e["license"])
+		if families.has(family):
+			licence_tip += "\n" + String(families[family])
+		item.set_tooltip_text(Col.LICENSE, licence_tip)
 		if FAMILY_COLORS.has(family):
 			item.set_custom_bg_color(Col.LICENSE, FAMILY_COLORS[family])
 
@@ -240,5 +241,21 @@ func _on_loaded(state: Dictionary) -> void:
 	var line := "Catalog %s" % feed["version"]
 	_status.text = line if message == "" else "%s\n%s" % [line, message]
 	_fill_options()
+	_fit_columns()
 	_rebuild()
 	feed_changed.emit(feed)
+
+
+## Sizes the category and licence columns to their widest text in this feed,
+## so no licence id is cut short at any editor scale.
+func _fit_columns() -> void:
+	var font := _tree.get_theme_font("font")
+	var size := _tree.get_theme_font_size("font_size")
+	var pad := 16.0 * EditorInterface.get_editor_scale()
+	var widest := {Col.CATEGORY: 0.0, Col.LICENSE: 0.0}
+	for label in feed.get("categories", {}).values():
+		widest[Col.CATEGORY] = maxf(widest[Col.CATEGORY], font.get_string_size(String(label), HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
+	for e in feed.get("entries", []):
+		widest[Col.LICENSE] = maxf(widest[Col.LICENSE], font.get_string_size(String(e["license"]), HORIZONTAL_ALIGNMENT_LEFT, -1, size).x)
+	for col in widest:
+		_tree.set_column_custom_minimum_width(col, ceili(widest[col] + pad))
