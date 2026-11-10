@@ -102,8 +102,8 @@ catalog's GitHub Pages site. Nothing about you or your project is sent.
 ## Develop
 
 The repository root is a small Godot project with the plugin turned on. Open it in Godot 4.3 or
-later and the dock appears on the right. `project.godot` and `tests/` are left out of the Asset
-Library download.
+later and the dock appears on the right. Only `addons/free_game_dev_assets/` goes into the Asset
+Library download; `project.godot`, `tests/`, `tools/` and `docs/` are left out.
 
 ```
 addons/free_game_dev_assets/
@@ -117,6 +117,9 @@ tests/
   run_tests.gd      headless unit tests against a fixture feed
   check_feed_file.gd  checks a downloaded live feed
   fixtures/feed_v1.json
+tools/
+  screenshot.sh     retakes the README screenshot of the dock
+  screenshot/       the dev-only editor plugin it uses
 ```
 
 Run the unit tests (no network, no editor):
@@ -133,6 +136,19 @@ godot --headless --editor --quit-after 300 --verbose --path .
 
 The output should include `free_game_dev_assets: dock added` and `dock removed`, and no
 `SCRIPT ERROR`.
+
+Retake the README screenshot after changing how the dock looks:
+
+```
+tools/screenshot.sh                      # writes docs/images/dock.png
+tools/screenshot.sh --query "font" --height 0 --out shot.png
+```
+
+It opens a real editor window for about ten seconds, on a temporary copy of the project, so
+it needs a display and either a connection or a catalog cached by an earlier run. Your repo
+and your saved dock filters are left alone. It also checks every licence on screen: if one is
+cut short it still saves the image but exits with code 2. `tools/screenshot.sh --help` lists
+the options, and `GODOT=/path/to/godot` picks the binary.
 
 [CI](.github/workflows/ci.yml) runs both of these on Godot 4.3 and the latest stable on every
 push and every Monday, each on a Godot download pinned by SHA-512. Each run also downloads the
