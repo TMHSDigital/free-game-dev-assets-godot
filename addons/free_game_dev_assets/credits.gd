@@ -168,6 +168,29 @@ static func list_text(ids: Array, known: Dictionary) -> String:
 	return JSON.stringify({"format": LIST_FORMAT, "ids": ids, "known": kept}, "\t", false) + "\n"
 
 
+## Entry ids in pasted text, for importing a list made on the website.
+## Reads catalog page links (".../entry/<id>/", which the website shortlist's
+## licence-changes.opml and exported CREDITS.md links contain) and bare ids
+## separated by spaces, commas or new lines. Returns {ids, unknown}: `ids` are
+## in the feed, in the order they first appear; `unknown` are linked ids the
+## feed doesn't list. Other words are ignored.
+static func ids_from_text(text: String, feed: Dictionary) -> Dictionary:
+	var in_feed := {}
+	for e in feed.get("entries", []):
+		in_feed[e["id"]] = true
+	var out := {"ids": [], "unknown": []}
+	var re := RegEx.create_from_string("entry/([^/\\s\"'<>]+)/|([A-Za-z0-9][A-Za-z0-9._~-]*)")
+	for m in re.search_all(text):
+		var linked := m.get_string(1) != ""
+		var id := m.get_string(1).uri_decode() if linked else m.get_string(2)
+		if in_feed.has(id):
+			if not out["ids"].has(id):
+				out["ids"].append(id)
+		elif linked and not out["unknown"].has(id):
+			out["unknown"].append(id)
+	return out
+
+
 static func snapshot(e: Dictionary) -> Dictionary:
 	var snap := {}
 	for key in _KNOWN_KEYS:

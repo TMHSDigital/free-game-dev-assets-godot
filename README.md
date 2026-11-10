@@ -67,7 +67,8 @@ your project, not in the folder, so they are kept. [CHANGELOG.md](CHANGELOG.md) 
 ## Credits for your project
 
 Select an entry and press **Add to project**; rows your project uses get a ✓, and **Only this
-project's** shows just those. **Export credits** then writes what they owe into `CREDITS.md` at
+project's** shows just those. Made a shortlist on the website? **Import…** takes the
+`licence-changes.opml` it exports, catalog page links, or entry ids, and adds them all. **Export credits** then writes what they owe into `CREDITS.md` at
 the root of your project: credit lines to ship, licence notices to keep with the files, sources
 to check file by file, open questions, and the ones that need nothing.
 

@@ -219,6 +219,21 @@ func _run(dock) -> void:
 	eq("unwritable list: says so", dock._project_note.text.ends_with("Could not save free_game_dev_assets.json."), true)
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(Credits.LIST_FILE))
 
+	# Import: the dialog opens, and pasted links and ids land in the list.
+	dock._load_list()
+	dock._update_project_row()
+	dock._on_import_pressed()
+	eq("import: dialog opens", dock._import_dialog.visible, true)
+	dock._import_dialog.hide()
+	var site := String(dock.feed["siteUrl"]).trim_suffix("/")
+	dock._import_ids("%s/entry/%s/\n%s, %s/entry/not-a-real-entry/" % [site, notice, credited, site])
+	eq("import: ids added in pasted order", Credits.parse_list(_read(Credits.LIST_FILE))["ids"], [notice, credited])
+	eq("import: snapshot saved", Credits.parse_list(_read(Credits.LIST_FILE))["known"][credited]["credit_line"], _entry(dock, credited)["credit_line"])
+	eq("import: says what it did", dock._project_note.text, "Added 2 to the project. 1 not in the catalog: not-a-real-entry.")
+	dock._import_ids(credited)
+	eq("import: again adds nothing", dock._project_note.text, "Added 0 to the project (1 already in it).")
+	eq("import: project row counts them", dock._project_label.text, "This project uses 2")
+
 	if _failed.is_empty():
 		print("e2e ok: %d checks" % _passed)
 		get_tree().quit(0)

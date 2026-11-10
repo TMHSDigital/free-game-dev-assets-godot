@@ -9,6 +9,10 @@ and the changelog will say so.
 
 ### Added
 
+- **Import…** adds entries to the project's asset list from pasted text: the
+  `licence-changes.opml` the website's shortlist exports, catalog page links, or entry ids.
+  Links to entries the catalog doesn't list are named in the note.
+
 - A file format filter next to category and licence, listing every format in the catalog with
   how many entries have it, most common first.
 

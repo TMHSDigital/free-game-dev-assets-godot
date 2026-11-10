@@ -61,6 +61,9 @@ var _list_error := ""
 var _project_label: Label
 var _project_only: CheckBox
 var _export: Button
+var _import: Button
+var _import_dialog: ConfirmationDialog
+var _import_text: TextEdit
 var _project_note: Label
 var _details_hint: Label
 var _details: VBoxContainer
@@ -494,6 +497,11 @@ func _build_project_row() -> void:
 	_export.tooltip_text = "Write what this project's assets owe into %s. Only the part between the plugin's markers is replaced." % Credits.CREDITS_FILE
 	_export.pressed.connect(_on_export)
 	row.add_child(_export)
+	_import = Button.new()
+	_import.text = "Import…"
+	_import.tooltip_text = "Add entries to this project's asset list from catalog page links, the website shortlist's licence-changes.opml, or entry ids"
+	_import.pressed.connect(_on_import_pressed)
+	row.add_child(_import)
 	_project_note = Label.new()
 	_project_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_project_note.visible = false
@@ -553,14 +561,71 @@ func _update_project_row() -> void:
 		_project_label.text = text
 		_project_label.tooltip_text = "Rows marked \"changed since added\" show what changed when selected. Export credits writes the new terms." if changed > 0 else ""
 	_export.disabled = feed.is_empty() or _list_error != "" or _project_ids.is_empty()
+	_import.disabled = feed.is_empty() or _list_error != ""
 	_update_project_button()
 
 
 func _has_entry(id: String) -> bool:
+	return not _entry_by_id(id).is_empty()
+
+
+func _entry_by_id(id: String) -> Dictionary:
 	for e in feed.get("entries", []):
 		if e["id"] == id:
-			return true
-	return false
+			return e
+	return {}
+
+
+func _on_import_pressed() -> void:
+	if _import_dialog == null:
+		_import_dialog = ConfirmationDialog.new()
+		_import_dialog.title = "Import into this project's asset list"
+		_import_dialog.ok_button_text = "Import"
+		var box := VBoxContainer.new()
+		var hint := Label.new()
+		hint.text = "Paste catalog page links, the licence-changes.opml exported from the website's shortlist, or entry ids."
+		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hint.custom_minimum_size.x = 480 * EditorInterface.get_editor_scale()
+		box.add_child(hint)
+		_import_text = TextEdit.new()
+		_import_text.custom_minimum_size = Vector2(480, 220) * EditorInterface.get_editor_scale()
+		box.add_child(_import_text)
+		_import_dialog.add_child(box)
+		_import_dialog.confirmed.connect(func(): _import_ids(_import_text.text))
+		add_child(_import_dialog)
+	_import_text.text = ""
+	_import_dialog.popup_centered()
+	_import_text.grab_focus()
+
+
+## Adds the catalog entries found in `text` to the project's list, after
+## the ones already there.
+func _import_ids(text: String) -> void:
+	_load_list()
+	if _list_error != "":
+		_update_project_row()
+		return
+	var found := Credits.ids_from_text(text, feed)
+	var added := 0
+	for id in found["ids"]:
+		if not _project_ids.has(id):
+			_project_ids.append(id)
+			_known[id] = Credits.snapshot(_entry_by_id(id))
+			added += 1
+	var note := "Found no catalog entries in the pasted text."
+	if not found["ids"].is_empty() or not found["unknown"].is_empty():
+		note = "Added %d to the project" % added
+		var already: int = found["ids"].size() - added
+		if already > 0:
+			note += " (%d already in it)" % already
+		note += "."
+		if not found["unknown"].is_empty():
+			note += " %d not in the catalog: %s." % [found["unknown"].size(), ", ".join(PackedStringArray(found["unknown"]))]
+	if added > 0 and not _save_list():
+		return  # _save_list said why
+	_note(note)
+	_rebuild()
+	_update_project_row()
 
 
 func _update_project_button() -> void:

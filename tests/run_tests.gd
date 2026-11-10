@@ -615,6 +615,17 @@ func _test_credits() -> bool:
 	eq("export: reports the changes", refreshed["changed"].size(), 2)
 	eq("export: CREDITS block unchanged by them", refreshed["text"], Credits.export_block(ids, Credits.export_block(ids, snaps, feed)["known"], feed)["text"])
 	eq("export: refreshed snapshot clears them", Credits.changes(ids, refreshed["known"], feed), [])
+
+	# Import: ids from pasted text.
+	var opml := "<opml version=\"2.0\"><body>\n" \
+		+ "<outline type=\"rss\" text=\"Mit D\" xmlUrl=\"https://example.org/entry/mit-d/changes.xml\" htmlUrl=\"https://example.org/entry/mit-d/\" />\n" \
+		+ "<outline type=\"rss\" text=\"Gone\" xmlUrl=\"https://example.org/entry/gone-y/changes.xml\" htmlUrl=\"https://example.org/entry/gone-y/\" />\n" \
+		+ "<outline type=\"rss\" text=\"Credit A\" xmlUrl=\"https://example.org/entry/credit-a/changes.xml\" htmlUrl=\"https://example.org/entry/credit-a/\" />\n" \
+		+ "</body></opml>"
+	eq("import: website OPML, in its order", Credits.ids_from_text(opml, feed), {"ids": ["mit-d", "credit-a"], "unknown": ["gone-y"]})
+	eq("import: page links and bare ids mixed", Credits.ids_from_text("cc0-e, https://example.org/entry/credit-a/\nmit-d mit-d", feed)["ids"], ["cc0-e", "credit-a", "mit-d"])
+	eq("import: ordinary words are ignored", Credits.ids_from_text("Credits for my game: art and music", feed), {"ids": [], "unknown": []})
+	eq("import: a percent-encoded link", Credits.ids_from_text("https://example.org/entry/credit%2Da/", feed)["ids"], ["credit-a"])
 	return true
 
 
