@@ -6,6 +6,7 @@ extends SceneTree
 const Feed := preload("res://addons/free_game_dev_assets/feed.gd")
 const Cache := preload("res://addons/free_game_dev_assets/feed_cache.gd")
 const FeedClient := preload("res://addons/free_game_dev_assets/feed_client.gd")
+const Browse := preload("res://addons/free_game_dev_assets/browse.gd")
 
 const FIXTURE := "res://tests/fixtures/feed_v1.json"
 const SCRATCH := "user://test_cache"
@@ -19,6 +20,7 @@ func _initialize() -> void:
 	_test_parse()
 	_test_cache()
 	_test_client()
+	_test_browse()
 	_clear_scratch()
 	if _failed.is_empty():
 		print("tests ok: %d checks" % _passed)
@@ -182,6 +184,104 @@ func _test_client() -> void:
 	eq("client newer format, no cache: source", c[1][0]["source"], "none")
 	eq("client newer format, no cache: says update", c[1][0]["message"].contains("update the plugin"), true)
 	c[0].free()
+
+
+# --- browse.gd ---------------------------------------------------------------
+
+func _ids(entries: Array) -> Array:
+	return entries.map(func(e): return e["id"])
+
+
+func _browse_entries() -> Array:
+	var entries: Array = Feed.parse(fixture_text())["feed"]["entries"]
+	# A non-commercial, needs-review entry the fixture lacks.
+	var nc: Dictionary = entries[2].duplicate(true)
+	nc.merge({"id": "nc-pack", "name": "Zeta NC Pack", "category": "audio", "license": "CC-BY-NC-4.0",
+		"licenseFamily": "custom", "commercial": false, "attribution_required": true,
+		"works_in": ["godot"], "made_for": [], "status": "needs-review",
+		"publisher": "Kenney Fan", "summary": "Non-commercial sounds", "tags": ["sfx"]}, true)
+	entries.append(nc)
+	return entries
+
+
+func _test_browse() -> void:
+	var all := _browse_entries()
+	var none := Browse.default_filters()
+	none["godot"] = false
+
+	eq("browse: defaults have Works in Godot on", Browse.default_filters()["godot"], true)
+	eq("browse: no filters keeps all", Browse.apply(all, none).size(), 5)
+	eq("browse: Works in Godot drops the Unreal-only entry",
+		_ids(Browse.apply(all, Browse.default_filters())).has("als-community"), false)
+	eq("browse: Works in Godot keeps the rest", Browse.apply(all, Browse.default_filters()).size(), 4)
+
+	eq("browse: sort puts made-for-Godot first, then by name", _ids(Browse.apply(all, none)),
+		["beehave", "ox72-dungeon-tileset", "accad-mocap", "als-community", "nc-pack"])
+
+	var f := none.duplicate()
+	f["category"] = "tools"
+	eq("browse: category", _ids(Browse.apply(all, f)), ["beehave", "als-community"])
+
+	f = none.duplicate()
+	f["license_family"] = "permissive"
+	eq("browse: licence family", _ids(Browse.apply(all, f)), ["beehave", "als-community"])
+
+	f = none.duplicate()
+	f["commercial"] = true
+	eq("browse: commercial use OK", _ids(Browse.apply(all, f)).has("nc-pack"), false)
+	eq("browse: commercial keeps the others", Browse.apply(all, f).size(), 4)
+
+	f = none.duplicate()
+	f["no_credit"] = true
+	eq("browse: no credit needed", _ids(Browse.apply(all, f)),
+		["beehave", "ox72-dungeon-tileset", "als-community"])
+
+	f = none.duplicate()
+	f["query"] = "DUNGEON"
+	eq("browse: search name, case-insensitive", _ids(Browse.apply(all, f)), ["ox72-dungeon-tileset"])
+	f["query"] = "behavior-tree"
+	eq("browse: search tags", _ids(Browse.apply(all, f)), ["beehave"])
+	f["query"] = "kenney fan"
+	eq("browse: search publisher", _ids(Browse.apply(all, f)), ["nc-pack"])
+	f["query"] = "non-commercial sounds"
+	eq("browse: search summary", _ids(Browse.apply(all, f)), ["nc-pack"])
+	f["query"] = "  locomotion   walking "
+	eq("browse: every word must match", _ids(Browse.apply(all, f)), ["accad-mocap"])
+	f["query"] = "nothing-matches-this"
+	eq("browse: no match", Browse.apply(all, f).size(), 0)
+
+	f = none.duplicate()
+	f["category"] = "tools"
+	f["no_credit"] = true
+	f["godot"] = true
+	eq("browse: filters combine", _ids(Browse.apply(all, f)), ["beehave"])
+
+	var odd: Dictionary = all[0].duplicate(true)
+	odd.erase("commercial")
+	odd.erase("summary")
+	odd["publisher"] = null
+	f = none.duplicate()
+	f["commercial"] = true
+	f["query"] = "dungeon"
+	eq("browse: missing fields don't pass a filter or crash", Browse.apply([odd], f).size(), 0)
+
+	# Saved state.
+	var path := ProjectSettings.globalize_path(SCRATCH).path_join(Browse.SETTINGS_FILE)
+	eq("filters: nothing saved gives defaults", Browse.load_filters(path), Browse.default_filters())
+	var saved := Browse.default_filters()
+	saved.merge({"query": "tiles", "category": "2d", "license_family": "cc-by",
+		"commercial": true, "no_credit": true, "godot": false}, true)
+	eq("filters: save", Browse.save_filters(path, saved), true)
+	eq("filters: round trip", Browse.load_filters(path), saved)
+	var cfg := ConfigFile.new()
+	cfg.load(path)
+	cfg.set_value("filters", "commercial", "yes")
+	cfg.set_value("filters", "category", 7)
+	cfg.save(path)
+	var loaded := Browse.load_filters(path)
+	eq("filters: wrong type falls back (bool)", loaded["commercial"], false)
+	eq("filters: wrong type falls back (string)", loaded["category"], "")
+	DirAccess.remove_absolute(path)
 
 
 func _clear_scratch() -> void:
